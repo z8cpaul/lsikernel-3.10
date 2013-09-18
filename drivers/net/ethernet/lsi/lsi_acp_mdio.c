@@ -263,88 +263,6 @@ acp_mdio_initialize(void)
 /*
   ==============================================================================
   ==============================================================================
-  Platform Device Registration
-  ==============================================================================
-  ==============================================================================
-*/
-
-/*
-  ------------------------------------------------------------------------------
-  acp_platform_device_register
-*/
-
-int
-acp_platform_device_register(struct platform_device *pdev)
-{
-	return platform_device_register(pdev);
-}
-
-EXPORT_SYMBOL(acp_platform_device_register);
-
-/*
-  ------------------------------------------------------------------------------
-  acp_platform_device_unregister
-*/
-
-void
-acp_platform_device_unregister(struct platform_device *pdev)
-{
-	platform_device_unregister(pdev);
-
-	return;
-}
-
-EXPORT_SYMBOL(acp_platform_device_unregister);
-
-/*
-  ============================================================================
-  ============================================================================
-  SKB
-  ============================================================================
-  ============================================================================
-*/
-
-/*
-  ----------------------------------------------------------------------------
-  acp_skb_tstamp_tx
-*/
-
-void
-acp_skb_tstamp_tx(struct sk_buff *orig_skb,
-		  struct skb_shared_hwtstamps *hwtstamps) {
-	skb_tstamp_tx(orig_skb, hwtstamps);
-}
-
-EXPORT_SYMBOL(acp_skb_tstamp_tx);
-
-/*
-  ============================================================================
-  ============================================================================
-  Interrupts
-  ============================================================================
-  ============================================================================
-*/
-
-/*
- * -------------------------------------------------------------------------
- * acp_irq_create_mapping
- */
-unsigned int acp_irq_create_mapping(struct irq_domain *host,
-				    irq_hw_number_t hwirq)
-{
-	unsigned int mapped_irq;
-
-	preempt_disable();
-	mapped_irq = irq_create_mapping(host, hwirq);
-	preempt_enable();
-
-	return mapped_irq;
-}
-EXPORT_SYMBOL(acp_irq_create_mapping);
-
-/*
-  ==============================================================================
-  ==============================================================================
   Linux Stuff
   ==============================================================================
   ==============================================================================
@@ -356,7 +274,7 @@ EXPORT_SYMBOL(acp_irq_create_mapping);
 */
 
 int __init
-acp_wrappers_init(void)
+acp_mdio_init(void)
 {
 	int rc = -ENODEV;
 	struct device_node *np = NULL;
@@ -393,7 +311,7 @@ error:
 	return rc;
 }
 
-module_init(acp_wrappers_init);
+module_init(acp_mdio_init);
 
 MODULE_AUTHOR("LSI Corporation");
 MODULE_DESCRIPTION("Timing Test");
