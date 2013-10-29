@@ -18,8 +18,6 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307	 USA
  */
 
-#if defined(CONFIG_ARCH_AXXIA) && defined(CONFIG_ARM)
-
 #include <linux/module.h>
 #include <linux/of.h>
 #include <asm/irq.h>
@@ -162,8 +160,13 @@ EXPORT_SYMBOL(acp_mdio_write);
 static int
 acp_mdio_initialize(void)
 {
+#ifdef CONFIG_ARM
 	WRITE(MDIO_CLK_OFFSET, 0x1c);
 	WRITE(MDIO_CLK_PERIOD, 0xf0);
+#else
+	WRITE(MDIO_CLK_OFFSET, 0x10);
+	WRITE(MDIO_CLK_PERIOD, 0x2c);
+#endif
 
 	return 0;
 }
@@ -218,5 +221,3 @@ module_init(acp_wrappers_init);
 MODULE_AUTHOR("LSI Corporation");
 MODULE_DESCRIPTION("Timing Test");
 MODULE_LICENSE("GPL");
-
-#endif
