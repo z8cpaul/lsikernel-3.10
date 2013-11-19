@@ -1,5 +1,5 @@
 /*
- * arch/arm/boot/dts/axm-sim.dts
+ * arch/arm/boot/dts/axm55xxsim.dts
  *
  * Copyright (C) 2012 LSI
  *
@@ -22,7 +22,7 @@
 
 / {
 	model = "AXM5516";
-	compatible = "arm", "lsi,axm5516";
+	compatible = "arm", "lsi,axm5516-sim";
 	interrupt-parent = <&gic>;
 	#address-cells = <2>;
 	#size-cells = <2>;
