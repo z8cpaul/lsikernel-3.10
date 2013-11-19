@@ -166,6 +166,8 @@
 		interrupt-controller;
 		reg = <0x20 0x01001000 0 0x1000>,  /* gic dist base */
 		      <0x20 0x01002000 0 0x100>,   /* gic cpu base */
+		      <0x20 0x01004000 0 0x2000>,  /* vgic control */
+		      <0x20 0x01006000 0 0x2000>,  /* vgic cpu base */
 		      <0x20 0x10030000 0 0x100>,   /* axm IPI mask reg base */
 		      <0x20 0x10040000 0 0x20000>; /* axm IPI send reg base */
 	};
@@ -173,7 +175,9 @@
 	timer {
 		compatible = "arm,armv7-timer";
 		interrupts = <1 13 0xf08>,
-			     <1 14 0xf08>;
+			     <1 14 0xf08>,
+			     <1 11 0xf08>,
+			     <1 10 0xf08>;
 	};
 
 
