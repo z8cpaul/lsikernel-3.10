@@ -195,7 +195,7 @@ axxia_i2c_init(struct axxia_i2c_dev *idev)
 	tmo_clk = ns_to_clk(SCL_WAIT_TIMEOUT_NS, clk_mhz);
 
 	/*
-	   Find the prescaler value that makes tmo_clk fit in 15-bits counter.
+	 * Find the prescaler value that makes tmo_clk fit in 15-bits counter.
 	 */
 	for (prescale = 0; prescale < 15; ++prescale) {
 		if (tmo_clk <= 0x7fff)
@@ -254,36 +254,6 @@ axxia_i2c_fill_tx_fifo(struct axxia_i2c_dev *idev)
 
 	return 0;
 }
-
-#ifdef DEBUG
-static char *
-status_str(u32 status)
-{
-	static char buf[128];
-
-	buf[0] = '\0';
-
-	if (status & MST_STATUS_RFL)
-		strcat(buf, "RFL ");
-	if (status & MST_STATUS_TFL)
-		strcat(buf, "TFL ");
-	if (status & MST_STATUS_SNS)
-		strcat(buf, "SNS ");
-	if (status & MST_STATUS_SS)
-		strcat(buf, "SS ");
-	if (status & MST_STATUS_SCC)
-		strcat(buf, "SCC ");
-	if (status & MST_STATUS_TSS)
-		strcat(buf, "TSS ");
-	if (status & MST_STATUS_AL)
-		strcat(buf, "AL ");
-	if (status & MST_STATUS_ND)
-		strcat(buf, "ND ");
-	if (status & MST_STATUS_NA)
-		strcat(buf, "NA ");
-	return buf;
-}
-#endif
 
 static irqreturn_t
 axxia_i2c_isr(int irq, void *_dev)
@@ -436,7 +406,7 @@ static const struct i2c_algorithm axxia_i2c_algo = {
 	.functionality	= axxia_i2c_func,
 };
 
-static int __devinit
+static int
 axxia_i2c_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
@@ -475,7 +445,7 @@ axxia_i2c_probe(struct platform_device *pdev)
 	}
 
 	idev->base         = base;
-	idev->regs         = (struct __iomem i2c_regs *) base;
+	idev->regs         = (struct __iomem i2c_regs*)base;
 	idev->i2c_clk      = i2c_clk;
 	idev->dev          = &pdev->dev;
 	init_completion(&idev->msg_complete);
@@ -536,7 +506,7 @@ err_cleanup:
 	return ret;
 }
 
-static int __devexit
+static int
 axxia_i2c_remove(struct platform_device *pdev)
 {
 	struct axxia_i2c_dev *idev = platform_get_drvdata(pdev);
@@ -564,7 +534,7 @@ static int axxia_i2c_resume(struct platform_device *pdev)
 #endif
 
 /* Match table for of_platform binding */
-static const struct of_device_id axxia_i2c_of_match[] __devinitconst = {
+static const struct of_device_id axxia_i2c_of_match[] = {
 	{ .compatible = "lsi,api2c", },
 	{},
 };
@@ -572,7 +542,7 @@ MODULE_DEVICE_TABLE(of, axxia_i2c_of_match);
 
 static struct platform_driver axxia_i2c_driver = {
 	.probe   = axxia_i2c_probe,
-	.remove  = __devexit_p(axxia_i2c_remove),
+	.remove  = axxia_i2c_remove,
 	.suspend = axxia_i2c_suspend,
 	.resume  = axxia_i2c_resume,
 	.driver  = {

@@ -3,6 +3,7 @@
  *
  * The driver is based on:
  *
+ * lsi-dma32.c -
  * lsi-dma.c - Copyright 2011 Mentor Graphics
  * acp_gpdma.c - Copyright (c) 2011, Ericsson AB
  *               Niclas Bengtsson <niklas.x.bengtsson@ericsson.com>
@@ -45,14 +46,14 @@
 	do { \
 		struct gpdma_engine *_e = engine; \
 		(void)_e; \
-		printk(KERN_DEBUG "dma0: " fmt, ##__VA_ARGS__); \
+		pr_debug("dma0: " fmt, ##__VA_ARGS__); \
 	} while (0)
 
 #define ch_dbg(dmac, fmt, ...) \
 	do { \
 		struct gpdma_channel *_c = dmac; \
 		(void)_c; \
-		printk(KERN_DEBUG "dma0ch%d: [%s] " fmt, \
+		pr_debug("dma0ch%d: [%s] " fmt, \
 			dmac->channel, __func__, ##__VA_ARGS__); \
 	} while (0)
 #else
@@ -754,7 +755,7 @@ static const struct of_device_id gpdma_of_ids[] = {
  *
  *
  */
-static int __devinit gpdma_of_probe(struct platform_device *op)
+static int gpdma_of_probe(struct platform_device *op)
 {
 	struct gpdma_engine *engine;
 	struct dma_device   *dma;
@@ -767,7 +768,7 @@ static int __devinit gpdma_of_probe(struct platform_device *op)
 	if (!match)
 		return -EINVAL;
 
-	engine = kzalloc(sizeof *engine, GFP_KERNEL);
+	engine = kzalloc(sizeof(*engine), GFP_KERNEL);
 	if (!engine)
 		return -ENOMEM;
 
@@ -776,7 +777,7 @@ static int __devinit gpdma_of_probe(struct platform_device *op)
 	kref_init(&engine->kref);
 	raw_spin_lock_init(&engine->lock);
 	engine->dev = &op->dev;
-	engine->chip = match->data;
+	engine->chip = (struct lsidma_hw *)match->data;
 
 	/* Initialize dma_device struct */
 	dma = &engine->dma_device;

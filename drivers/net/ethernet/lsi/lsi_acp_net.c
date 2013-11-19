@@ -86,12 +86,10 @@
 #include <linux/uaccess.h>
 #include <linux/io.h>
 #include <asm/dma.h>
+#include <asm/lsi/acp_ncr.h>
 
 #include "lsi_acp_net.h"
 #include "../../../misc/lsi-ncr.h"
-
-extern int acp_mdio_read(unsigned long, unsigned long, unsigned short *, int);
-extern int acp_mdio_write(unsigned long, unsigned long, unsigned short, int);
 
 /* Define to disable full duplex mode on Amarillo boards */
 #undef AMARILLO_WA
@@ -118,8 +116,7 @@ static void *gpreg_base;
 #define PHY_BCM_TEST_REG	0x1f
 #define PHY_AUXILIARY_MODE3	0x1d
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_mii_read
  *
  * Returns -EBUSY if unsuccessful, the (short) value otherwise.
@@ -135,8 +132,7 @@ static int appnic_mii_read(struct mii_bus *bus, int phy, int reg)
 	return (int)value;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_mii_write
  */
 
@@ -145,8 +141,7 @@ static int appnic_mii_write(struct mii_bus *bus, int phy, int reg, u16 val)
 	return acp_mdio_write(phy, reg, val, 0);
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_handle_link_change
  *
  * Called periodically when PHY is in polling mode.
@@ -230,8 +225,7 @@ static void appnic_handle_link_change(struct net_device *dev)
 	return;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_mii_probe
  */
 
@@ -257,8 +251,7 @@ static int appnic_mii_probe(struct net_device *dev)
 
 skip_first:
 
-	/*
-	 * Allow the option to disable auto negotiation and manually specify
+	/* Allow the option to disable auto negotiation and manually specify
 	 * the link speed and duplex setting with the use of a environment
 	 * setting.
 	 */
@@ -274,7 +267,7 @@ skip_first:
 	}
 
 	ret = phy_connect_direct(dev, phydev,
-				 &appnic_handle_link_change, 0,
+				 &appnic_handle_link_change,
 				 PHY_INTERFACE_MODE_MII);
 
 	if (ret) {
@@ -330,13 +323,12 @@ skip_first:
 	return 0;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_mii_init
  */
 
-static int __devinit appnic_mii_init(struct platform_device *pdev,
-				     struct net_device *dev)
+static int appnic_mii_init(struct platform_device *pdev,
+			   struct net_device *dev)
 {
 	struct appnic_device *pdata = netdev_priv(dev);
 	int i, err = -ENXIO;
@@ -377,10 +369,9 @@ err_out_1:
 	return err;
 }
 
-/*
-  ======================================================================
-  NIC Interface
-  ======================================================================
+/* ======================================================================
+   NIC Interface
+   ======================================================================
 */
 
 #define DESCRIPTOR_GRANULARITY 64
@@ -392,8 +383,7 @@ err_out_1:
 #define ALIGN64B_OFFSET(address) \
 	(ALIGN64B(address) - (unsigned long) (address))
 
-/*
- *  ----- Note On Buffer Space -----
+/*  ----- Note On Buffer Space -----
  *
  *  Minimum number of descriptors is 64 for the receiver and 64 for the
  *  transmitter; therefore, 2048 bytes (16 bytes each).
@@ -412,9 +402,7 @@ err_out_1:
  *    descriptor.
  */
 
-/*
- * Receiver
- */
+/* Receiver */
 
 int rx_num_desc = (CONFIG_LSI_NET_NUM_RX_DESC * DESCRIPTOR_GRANULARITY);
 module_param(rx_num_desc, int, 0);
@@ -424,9 +412,7 @@ int rx_buf_sz = CONFIG_LSI_NET_RX_BUF_SZ;
 module_param(rx_buf_sz, int, 0);
 MODULE_PARM_DESC(rx_buf_sz, "appnic : Receive buffer size");
 
-/*
- * Transmitter
- */
+/* Transmitter */
 
 int tx_num_desc = (CONFIG_LSI_NET_NUM_TX_DESC * DESCRIPTOR_GRANULARITY);
 module_param(tx_num_desc, int, 0);
@@ -441,30 +427,24 @@ static unsigned long out_of_tx_descriptors;
 static unsigned long transmit_interrupts;
 static unsigned long receive_interrupts;
 
-/*
-  ======================================================================
-  Utility Functions
-  ======================================================================
+/* ======================================================================
+   Utility Functions
+   ======================================================================
 */
 
-/*
-  ----------------------------------------------------------------------
-  clear_statistics
-*/
+/* ----------------------------------------------------------------------
+ * clear_statistics
+ */
 
 static void clear_statistics(struct appnic_device *pdata)
 {
 	int waste;
 
-	/*
-	 * Clear memory.
-	 */
+	/* Clear memory. */
 
 	memset((void *) &(pdata->stats), 0, sizeof(struct net_device_stats));
 
-	/*
-	 * Clear counters.
-	 */
+	/* Clear counters. */
 
 	waste = read_mac(APPNIC_RX_STAT_PACKET_OK); /* rx_packets */
 	waste = read_mac(APPNIC_TX_STAT_PACKET_OK); /* tx_packets */
@@ -517,15 +497,11 @@ static void clear_statistics(struct appnic_device *pdata)
 	/* rx_compressed will not be maintained. */
 	/* tx_compressed will not be maintained. */
 
-	/*
-	 * That's all.
-	 */
-
+	/* That's all. */
 	return;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * get_hw_statistics
  *
  *  -- NOTES --
@@ -538,15 +514,12 @@ static void get_hw_statistics(struct appnic_device *pdata)
 	unsigned long flags;
 
 	/* tx_packets */
-
 	pdata->stats.tx_packets += read_mac(APPNIC_TX_STAT_PACKET_OK);
 
 	/* multicast */
-
 	pdata->stats.multicast += read_mac(APPNIC_RX_STAT_MULTICAST);
 
 	/* collision */
-
 	pdata->stats.collisions += read_mac(APPNIC_TX_STATUS_LATE_COLLISION);
 	pdata->stats.collisions +=
 		read_mac(APPNIC_TX_STATUS_EXCESSIVE_COLLISION);
@@ -554,19 +527,15 @@ static void get_hw_statistics(struct appnic_device *pdata)
 	read_mac(APPNIC_TX_STAT_COLLISION_ABOVE_WATERMARK);
 
 	/* rx_length_errors */
-
 	pdata->stats.rx_length_errors += read_mac(APPNIC_RX_STAT_UNDERSIZE);
 	pdata->stats.rx_length_errors += read_mac(APPNIC_RX_STAT_OVERSIZE);
 
 	/* tx_fifo_errors */
-
 	pdata->stats.tx_fifo_errors += read_mac(APPNIC_TX_STAT_UNDERRUN);
 
-	/*
-	 * Lock this section out so the statistics maintained by the driver
+	/* Lock this section out so the statistics maintained by the driver
 	 * don't get clobbered.
 	 */
-
 	spin_lock_irqsave(&pdata->dev_lock, flags);
 
 	pdata->stats.rx_errors +=
@@ -586,15 +555,11 @@ static void get_hw_statistics(struct appnic_device *pdata)
 
 	spin_unlock_irqrestore(&pdata->dev_lock, flags);
 
-	/*
-	 * That's all.
-	 */
-
+	/* That's all. */
 	return;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * queue_initialized
  *
  * Returns the number of descriptors that are ready to receive packets
@@ -624,8 +589,7 @@ static int queue_initialized(union appnic_queue_pointer head,
 	return initialized;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * queue_uninitialzed
  *
  * Returns the number of unused/uninitialized descriptors. (from head to tail).
@@ -653,8 +617,7 @@ static int queue_uninitialized(union appnic_queue_pointer head,
 	return allocated;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * queue_increment
  */
 
@@ -674,8 +637,7 @@ static void queue_increment(union appnic_queue_pointer *queue,
 	return;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * queue_decrement
  */
 
@@ -695,8 +657,7 @@ static void queue_decrement(union appnic_queue_pointer *queue,
 	return;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * disable_rx_tx
  */
 
@@ -721,14 +682,12 @@ static void disable_rx_tx(void)
 }
 
 
-/*
-  ======================================================================
-  Linux Network Driver Interface
-  ======================================================================
+/* ======================================================================
+   Linux Network Driver Interface
+   ======================================================================
 */
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * handle_transmit_interrupt
  */
 
@@ -736,8 +695,7 @@ static void handle_transmit_interrupt(struct net_device *dev)
 {
 	struct appnic_device *pdata = netdev_priv(dev);
 
-	/*
-	 * The hardware's tail pointer should be one descriptor (or more)
+	/* The hardware's tail pointer should be one descriptor (or more)
 	 * ahead of software's copy.
 	 */
 
@@ -749,8 +707,7 @@ static void handle_transmit_interrupt(struct net_device *dev)
 	return;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * lsinet_rx_packet
  */
 
@@ -783,9 +740,7 @@ static void lsinet_rx_packet(struct net_device *dev)
 	crc_stat = read_mac(APPNIC_RX_STAT_CRC_ERROR);
 	align_stat = read_mac(APPNIC_RX_STAT_ALIGN_ERROR);
 
-	/*
-	 * Copy the received packet into the skb.
-	 */
+	/* Copy the received packet into the skb. */
 
 	while (0 < queue_initialized(SWAB_QUEUE_POINTER(pdata->rx_tail),
 				pdata->rx_tail_copy, pdata->rx_num_desc)) {
@@ -874,8 +829,7 @@ static void lsinet_rx_packet(struct net_device *dev)
 	return;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * lsinet_rx_packets
  */
 
@@ -888,8 +842,7 @@ static int lsinet_rx_packets(struct net_device *dev, int max)
 
 	queue.raw = pdata->rx_tail_copy.raw;
 
-	/* Receive Packets */
-
+	/* Receive Packets. */
 	while (0 < queue_initialized(SWAB_QUEUE_POINTER(pdata->rx_tail),
 				     queue, pdata->rx_num_desc)) {
 		struct appnic_dma_descriptor descriptor;
@@ -910,8 +863,7 @@ static int lsinet_rx_packets(struct net_device *dev, int max)
 		}
 	}
 
-	/* Update the Head Pointer */
-
+	/* Update the Head Pointer. */
 	while (1 < queue_uninitialized(pdata->rx_head,
 				       pdata->rx_tail_copy,
 				       pdata->rx_num_desc)) {
@@ -939,8 +891,7 @@ static int lsinet_rx_packets(struct net_device *dev, int max)
 	return packets;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * lsinet_poll
  */
 
@@ -971,8 +922,7 @@ static int lsinet_poll(struct napi_struct *napi, int budget)
 
 	napi_complete(napi);
 
-	/*
-	 * Re-enable receive interrupts (and preserve
+	/* Re-enable receive interrupts (and preserve
 	 * the already enabled TX interrupt).
 	 */
 	write_mac((APPNIC_DMA_INTERRUPT_ENABLE_RECEIVE |
@@ -982,8 +932,7 @@ static int lsinet_poll(struct napi_struct *napi, int budget)
 	return 0;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_isr
  */
 
@@ -994,17 +943,17 @@ static irqreturn_t appnic_isr(int irq, void *device_id)
 	unsigned long dma_interrupt_status;
 	unsigned long flags;
 
-	/* Acquire the lock */
+	/* Acquire the lock. */
 	spin_lock_irqsave(&pdata->dev_lock, flags);
 
 	/* Get the status. */
 	dma_interrupt_status = read_mac(APPNIC_DMA_INTERRUPT_STATUS);
 
-	/* NAPI - don't ack RX interrupt */
+	/* NAPI - don't ack RX interrupt. */
 	write_mac(APPNIC_DMA_INTERRUPT_ENABLE_RECEIVE,
 		  APPNIC_DMA_INTERRUPT_STATUS);
 
-	/* Handle interrupts */
+	/* Handle interrupts. */
 	if (TX_INTERRUPT(dma_interrupt_status)) {
 		/* transmition complete */
 		++transmit_interrupts;
@@ -1015,9 +964,8 @@ static irqreturn_t appnic_isr(int irq, void *device_id)
 		++receive_interrupts;
 		if (napi_schedule_prep(&pdata->napi)) {
 
-			/*
-			 * Disable RX interrupts and tell the
-			 * system we've got work
+			/* Disable RX interrupts and tell the
+			 * system we've got work.
 			 */
 			write_mac(APPNIC_DMA_INTERRUPT_ENABLE_TRANSMIT,
 				  APPNIC_DMA_INTERRUPT_ENABLE);
@@ -1028,7 +976,7 @@ static irqreturn_t appnic_isr(int irq, void *device_id)
 		}
 	}
 
-	/* Release the lock */
+	/* Release the lock. */
 	spin_unlock_irqrestore(&pdata->dev_lock, flags);
 
 	return IRQ_HANDLED;
@@ -1036,8 +984,7 @@ static irqreturn_t appnic_isr(int irq, void *device_id)
 
 #ifdef CONFIG_NET_POLL_CONTROLLER
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_poll_controller
  *
  * Polling receive - used by netconsole and other diagnostic tools
@@ -1054,8 +1001,7 @@ static void appnic_poll_controller(struct net_device *dev)
 #endif
 
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_open
  *
  * Opens the interface.  The interface is opened whenever ifconfig
@@ -1069,13 +1015,13 @@ static int appnic_open(struct net_device *dev)
 	struct appnic_device *pdata = netdev_priv(dev);
 	int return_code = 0;
 
-	/* Bring the PHY up */
+	/* Bring the PHY up. */
 	phy_start(pdata->phy_dev);
 
-	/* Enable NAPI */
+	/* Enable NAPI. */
 	napi_enable(&pdata->napi);
 
-	/* Install the interrupt handlers */
+	/* Install the interrupt handlers. */
 	return_code = request_irq(dev->irq, appnic_isr, IRQF_DISABLED,
 				   LSI_DRV_NAME, dev);
 	if (0 != return_code) {
@@ -1084,20 +1030,19 @@ static int appnic_open(struct net_device *dev)
 		return return_code;
 	}
 
-	/* Enable interrupts */
+	/* Enable interrupts. */
 	write_mac((APPNIC_DMA_INTERRUPT_ENABLE_RECEIVE |
 		   APPNIC_DMA_INTERRUPT_ENABLE_TRANSMIT),
 		   APPNIC_DMA_INTERRUPT_ENABLE);
 
-	/* Let the OS know we are ready to send packets */
+	/* Let the OS know we are ready to send packets. */
 	netif_start_queue(dev);
 
-	/* That's all */
+	/* That's all. */
 	return 0;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_stop
  *
  * Stops the interface.  The interface is stopped when it is brought
@@ -1110,7 +1055,7 @@ static int appnic_stop(struct net_device *dev)
 
 	pr_info("%s: Stopping the interface.\n", LSI_DRV_NAME);
 
-	/* Disable all device interrupts */
+	/* Disable all device interrupts. */
 	write_mac(0, APPNIC_DMA_INTERRUPT_ENABLE);
 	free_irq(dev->irq, dev);
 
@@ -1129,8 +1074,7 @@ static int appnic_stop(struct net_device *dev)
 	return 0;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_hard_start_xmit
  *
  * The method initiates the transmission of a packet.  The full packet
@@ -1152,9 +1096,7 @@ static int appnic_hard_start_xmit(struct sk_buff *skb,
 	length = skb->len < ETH_ZLEN ? ETH_ZLEN : skb->len;
 	buf_per_desc = pdata->tx_buf_sz / pdata->tx_num_desc;
 
-	/*
-	 * If enough transmit descriptors are available, copy and transmit.
-	 */
+	/* If enough transmit descriptors are available, copy and transmit. */
 
 	while (((length / buf_per_desc) + 1) >=
 		queue_uninitialized(pdata->tx_head,
@@ -1218,7 +1160,7 @@ static int appnic_hard_start_xmit(struct sk_buff *skb,
 		}
 
 #ifdef CONFIG_ARM
-		/* ARM Data sync barrier */
+		/* ARM Data sync barrier. */
 		asm volatile ("mcr p15,0,%0,c7,c10,4" : : "r" (0));
 #endif
 		write_mac(pdata->tx_head.raw, APPNIC_DMA_TX_HEAD_POINTER);
@@ -1229,14 +1171,13 @@ static int appnic_hard_start_xmit(struct sk_buff *skb,
 		       LSI_DRV_NAME);
 	}
 
-	/* Free the socket buffer */
+	/* Free the socket buffer. */
 	dev_kfree_skb(skb);
 
 	return 0;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_net_device_stats
  *
  * Whenever an application needs to get statistics for the interface,
@@ -1248,21 +1189,16 @@ static struct net_device_stats *appnic_get_stats(struct net_device *dev)
 {
 	struct appnic_device *pdata = netdev_priv(dev);
 
-	/*
-	 * Update the statistics structure.
-	 */
+	/* Update the statistics structure. */
 
 	get_hw_statistics(pdata);
 
-	/*
-	 * That's all.
-	 */
+	/* That's all. */
 
 	return &pdata->stats;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_set_mac_address
  */
 
@@ -1291,14 +1227,12 @@ static int appnic_set_mac_address(struct net_device *dev, void *data)
 	return 0;
 }
 
-/*
-  ======================================================================
-  ETHTOOL Operations
-  ======================================================================
+/* ======================================================================
+   ETHTOOL Operations
+   ======================================================================
 */
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_get_drvinfo
  */
 
@@ -1309,8 +1243,7 @@ static void appnic_get_drvinfo(struct net_device *dev,
 	strcpy(info->version, LSI_DRV_VERSION);
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_get_settings
  */
 
@@ -1326,20 +1259,16 @@ static int appnic_get_settings(struct net_device *dev,
 	return phy_ethtool_gset(phydev, cmd);
 }
 
-/*
- * Fill in the struture...
- */
-
+/* Fill in the struture... */
 static const struct ethtool_ops appnic_ethtool_ops = {
 	.get_drvinfo = appnic_get_drvinfo,
 	.get_settings = appnic_get_settings
 };
 
 
-/*
-  ======================================================================
-  Linux Module Interface.
-  ======================================================================
+/* ======================================================================
+   Linux Module Interface.
+   ======================================================================
 */
 
 static const struct net_device_ops appnic_netdev_ops = {
@@ -1354,8 +1283,7 @@ static const struct net_device_ops appnic_netdev_ops = {
 
 };
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_init
  */
 
@@ -1375,22 +1303,12 @@ int appnic_init(struct net_device *dev)
 	writel(0x0, gpreg_base+0x78);
 #endif
 
-
-	/*
-	 * Reset the MAC
-	 */
-
+	/* Reset the MAC. */
 	write_mac(0x80000000, APPNIC_DMA_PCI_CONTROL);
 
-	/*
-	 * Allocate memory and initialize the descriptors
-	 */
+	/* Allocate memory and initialize the descriptors. */
 
-
-	/*
-	 * fixup num_[rt]x_desc
-	 */
-
+	/* fixup num_[rt]x_desc */
 	if (0 != (rx_num_desc % DESCRIPTOR_GRANULARITY)) {
 		pr_warn("%s: rx_num_desc was not a multiple of %d.\n",
 			LSI_DRV_NAME, DESCRIPTOR_GRANULARITY);
@@ -1409,11 +1327,9 @@ int appnic_init(struct net_device *dev)
 
 	pdata->tx_num_desc = tx_num_desc;
 
-	/*
-	 * up [rt]x_buf_sz. Must be some multiple of 64 bytes
+	/* up [rt]x_buf_sz. Must be some multiple of 64 bytes
 	 * per descriptor.
 	 */
-
 	if (0 != (rx_buf_sz % (BUFFER_ALIGNMENT * rx_num_desc))) {
 		pr_warn("%s: rx_buf_sz was not a multiple of %d.\n",
 			LSI_DRV_NAME, (BUFFER_ALIGNMENT * rx_num_desc));
@@ -1432,18 +1348,17 @@ int appnic_init(struct net_device *dev)
 
 	pdata->tx_buf_sz = tx_buf_sz;
 
-	/*
-	 * Allocate dma-able memory. Broken into smaller parts to keep
+	/* Allocate dma-able memory. Broken into smaller parts to keep
 	 * from allocating a single large chunk of memory, but not too
 	 * small since mappings obtained from dma_alloc_coherent() have
 	 * a minimum size of one page.
 	 */
-
 	pdata->dma_alloc_size =
 		/* The tail pointers (rx and tx) */
 		(sizeof(union appnic_queue_pointer) * 2) +
 		/* The RX descriptor ring (and padding to allow
-		 * 64 byte alignment) */
+		 * 64 byte alignment)
+		 */
 		(sizeof(struct appnic_dma_descriptor) * pdata->rx_num_desc) +
 		(DESCRIPTOR_GRANULARITY) +
 		/* The TX descriptor ring (and padding...) */
@@ -1458,9 +1373,8 @@ int appnic_init(struct net_device *dev)
 		/* The TX buffer (and padding...) */
 		(pdata->tx_buf_sz) + (BUFFER_ALIGNMENT);
 
-	/*
-	 * This needs to be set to something sane for
-	 * dma_alloc_coherent()
+	/* This needs to be set to something sane for
+	 * dma_alloc_coherent().
 	 */
 
 #if defined(CONFIG_ARM)
@@ -1533,10 +1447,7 @@ int appnic_init(struct net_device *dev)
 	pdata->dma_alloc_offset_tx = (int)pdata->dma_alloc_tx -
 					(int)pdata->dma_alloc_dma_tx;
 
-	/*
-	 * Initialize the tail pointers
-	 */
-
+	/* Initialize the tail pointers. */
 	dma_offset = pdata->dma_alloc;
 
 	pdata->rx_tail = (union appnic_queue_pointer *)dma_offset;
@@ -1552,10 +1463,7 @@ int appnic_init(struct net_device *dev)
 	memset((void *)pdata->tx_tail, 0, sizeof(union appnic_queue_pointer));
 
 
-	/*
-	 * Initialize the descriptor pointers
-	 */
-
+	/* Initialize the descriptor pointers. */
 	pdata->rx_desc = (struct appnic_dma_descriptor *)ALIGN64B(dma_offset);
 	pdata->rx_desc_dma = (int)pdata->rx_desc - (int)pdata->dma_alloc_offset;
 	dma_offset += (sizeof(struct appnic_dma_descriptor) *
@@ -1570,10 +1478,7 @@ int appnic_init(struct net_device *dev)
 	memset((void *)pdata->tx_desc, 0,
 	       (sizeof(struct appnic_dma_descriptor) * pdata->tx_num_desc));
 
-	/*
-	 * Initialize the buffer pointers
-	 */
-
+	/* Initialize the buffer pointers. */
 	dma_offset = pdata->dma_alloc_rx;
 
 	pdata->rx_buf = (void *)ALIGN64B(dma_offset);
@@ -1588,10 +1493,7 @@ int appnic_init(struct net_device *dev)
 				(int)pdata->dma_alloc_offset_tx;
 	pdata->tx_buf_per_desc = pdata->tx_buf_sz / pdata->tx_num_desc;
 
-	/*
-	 * Initialize the descriptors
-	 */
-
+	/* Initialize the descriptors. */
 	buf = (unsigned long)pdata->rx_buf_dma;
 	for (index = 0; index < pdata->rx_num_desc; ++index) {
 		memset((void *) &descriptor, 0,
@@ -1624,26 +1526,17 @@ int appnic_init(struct net_device *dev)
 		buf += pdata->tx_buf_per_desc;
 	}
 
-	/*
-	 * Initialize the spinlocks.
-	 */
-
+	/* Initialize the spinlocks. */
 	spin_lock_init(&pdata->dev_lock);
 	spin_lock_init(&pdata->extra_lock);
 
-	/*
-	 * Take MAC out of reset
-	 */
-
+	/* Take MAC out of reset. */
 	write_mac(0x0, APPNIC_RX_SOFT_RESET);
 	write_mac(0x1, APPNIC_RX_MODE);
 	write_mac(0x0, APPNIC_TX_SOFT_RESET);
 	write_mac(0x1, APPNIC_TX_MODE);
 
-        /*
-	 * Set the watermark.
-	 */
-
+	/* Set the watermark. */
 	ncr_read(NCP_REGION_ID(0x16, 0xff), 0x10, 4, &node_cfg);
 
 	if (0 == (0x80000000 & node_cfg))
@@ -1667,9 +1560,7 @@ int appnic_init(struct net_device *dev)
 	out_le32(dma_base + 0x64, 0xc0);
 #endif
 
-	/*
-	 * Set the MAC address
-	 */
+	/* Set the MAC address */
 	pr_info("%s: MAC %02x:%02x:%02x:%02x:%02x:%02x\n", LSI_DRV_NAME,
 		dev->dev_addr[0], dev->dev_addr[1], dev->dev_addr[2],
 		dev->dev_addr[3], dev->dev_addr[4], dev->dev_addr[5]);
@@ -1677,14 +1568,9 @@ int appnic_init(struct net_device *dev)
 	memcpy(&(address.sa_data[0]), dev->dev_addr, 6);
 	appnic_set_mac_address(dev, &address);
 
-	/*
-	 * Initialize the queue pointers.
-	 */
+	/* Initialize the queue pointers. */
 
-	/*
-	 * Receiver
-	 */
-
+	/* Receiver */
 	memset((void *)&pdata->rx_tail_copy, 0,
 	       sizeof(union appnic_queue_pointer));
 	memset((void *)&pdata->rx_head, 0,
@@ -1695,23 +1581,19 @@ int appnic_init(struct net_device *dev)
 		   sizeof(struct appnic_dma_descriptor)) / 1024,
 		  APPNIC_DMA_RX_QUEUE_SIZE);
 
-	/*
-	 * Indicate that all of the receive descriptors
-	 * are ready
+	/* Indicate that all of the receive descriptors
+	 * are ready.
 	 */
-
 	pdata->rx_head.bits.offset = (pdata->rx_num_desc - 1) *
 					sizeof(struct appnic_dma_descriptor);
 	write_mac(pdata->rx_tail_dma, APPNIC_DMA_RX_TAIL_POINTER_ADDRESS);
 
-	/*
-	 * N.B.
+	/* N.B.
 	 *
 	 * The boot loader may have used the NIC.  If so, the
 	 * tail pointer must be read and the head pointer (and
 	 * local copy of the tail) based on it.
 	 */
-
 	pdata->rx_tail->raw =
 		  read_mac(APPNIC_DMA_RX_TAIL_POINTER_LOCAL_COPY);
 	pdata->rx_tail_copy.raw = pdata->rx_tail->raw;
@@ -1721,10 +1603,7 @@ int appnic_init(struct net_device *dev)
 		  (0 == pdata->rx_head.bits.generation_bit) ? 1 : 0;
 	write_mac(pdata->rx_head.raw, APPNIC_DMA_RX_HEAD_POINTER);
 
-	/*
-	 * Transmitter
-	 */
-
+	/* Transmitter */
 	memset((void *) &pdata->tx_tail_copy, 0,
 	       sizeof(union appnic_queue_pointer));
 	memset((void *) &pdata->tx_head, 0,
@@ -1736,25 +1615,21 @@ int appnic_init(struct net_device *dev)
 		  APPNIC_DMA_TX_QUEUE_SIZE);
 	write_mac(pdata->tx_tail_dma, APPNIC_DMA_TX_TAIL_POINTER_ADDRESS);
 
-	/*
-	 * N.B.
+	/* N.B.
 	 *
 	 * The boot loader may have used the NIC.  If so, the
 	 * tail pointer must be read and the head pointer (and
 	 * local copy of the tail) based on it.
 	 */
-
 	pdata->tx_tail->raw = read_mac(APPNIC_DMA_TX_TAIL_POINTER_LOCAL_COPY);
 	pdata->tx_tail_copy.raw = pdata->tx_tail->raw;
 	pdata->tx_head.raw = pdata->tx_tail->raw;
 	write_mac(pdata->tx_head.raw, APPNIC_DMA_TX_HEAD_POINTER);
 
 	/* Clear statistics */
-
 	clear_statistics(pdata);
 
 	/* Fill in the net_device structure */
-
 	ether_setup(dev);
 #ifdef CONFIG_ARM
 	dev->irq = pdata->dma_interrupt;
@@ -1783,31 +1658,13 @@ int appnic_init(struct net_device *dev)
 	return 0;
 }
 
-/*
- * ----------------------------------------------------------------------
- * appnic_read_proc
- */
-
-static int
-appnic_read_proc(char *page, char **start, off_t offset,
-		 int count, int *eof, void *data)
-{
-	int length;
-
-	length = sprintf(page, "-- appnic.c -- Profiling is disabled\n");
-
-	/* That's all */
-	return length;
-}
-
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_probe_config_dt
  */
 
 #ifdef CONFIG_OF
-static int __devinit appnic_probe_config_dt(struct net_device *dev,
-					    struct device_node *np)
+static int appnic_probe_config_dt(struct net_device *dev,
+				  struct device_node *np)
 {
 	struct appnic_device *pdata = netdev_priv(dev);
 	const u32 *field;
@@ -1953,12 +1810,11 @@ static inline int appnic_probe_config_dt(struct net_device *dev,
 }
 #endif /* CONFIG_OF */
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_drv_probe
  */
 
-static int __devinit appnic_drv_probe(struct platform_device *pdev)
+static int appnic_drv_probe(struct platform_device *pdev)
 {
 	int rc = 0;
 	struct device_node *np = pdev->dev.of_node;
@@ -1982,8 +1838,7 @@ static int __devinit appnic_drv_probe(struct platform_device *pdev)
 
 	pdata = netdev_priv(dev);
 
-	/*
-	 * Get the physical addresses, interrupt number, etc. from the
+	/* Get the physical addresses, interrupt number, etc. from the
 	 * device tree.  If no entry exists (older boot loader...) just
 	 * use the pre-devicetree method.
 	 */
@@ -1996,8 +1851,7 @@ static int __devinit appnic_drv_probe(struct platform_device *pdev)
 
 #ifdef CONFIG_MTD_NAND_EP501X_UBOOTENV
 
-		/*
-		 * Attempt to get device settings from the DTB failed, so
+		/* Attempt to get device settings from the DTB failed, so
 		 * try to grab the ethernet MAC from the u-boot environment
 		 * and use hard-coded values for device base addresses.
 		 */
@@ -2091,21 +1945,15 @@ static int __devinit appnic_drv_probe(struct platform_device *pdev)
 		rc = -ENODEV;
 		goto out;
 	}
-
-	/* Create the /proc entry. */
-	create_proc_read_entry("driver/appnic", 0, NULL,
-				appnic_read_proc, NULL);
-
 out:
 	return rc;
 }
 
-/*
- * ----------------------------------------------------------------------
+/* ----------------------------------------------------------------------
  * appnic_drv_remove
  */
 
-static int __devexit appnic_drv_remove(struct platform_device *pdev)
+static int appnic_drv_remove(struct platform_device *pdev)
 {
 	struct net_device *dev = platform_get_drvdata(pdev);
 	struct appnic_device *pdata;
@@ -2149,7 +1997,7 @@ MODULE_DEVICE_TABLE(of, appnic_dt_ids);
 
 static struct platform_driver appnic_driver = {
 	.probe = appnic_drv_probe,
-	.remove = __devexit_p(appnic_drv_remove),
+	.remove = appnic_drv_remove,
 	.driver = {
 		.name   = LSI_DRV_NAME,
 		.owner  = THIS_MODULE,
