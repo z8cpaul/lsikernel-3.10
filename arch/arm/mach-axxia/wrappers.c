@@ -50,7 +50,6 @@ acp_mdio_read(unsigned long address, unsigned long offset,
 {
 	return 0;
 }
-
 EXPORT_SYMBOL(acp_mdio_read);
 
 /*
@@ -64,7 +63,6 @@ acp_mdio_write(unsigned long address, unsigned long offset,
 {
 	return 0;
 }
-
 EXPORT_SYMBOL(acp_mdio_write);
 
 #endif	/* CONFIG_ARCH_AXXIA_SIM */
@@ -164,7 +162,7 @@ EXPORT_SYMBOL(acp_irq_create_mapping);
 int __init
 acp_wrappers_init(void)
 {
-	printk(KERN_INFO "Initializing Axxia Wrappers.\n");
+	pr_info("Initializing Axxia Wrappers.\n");
 
 	return 0;
 }

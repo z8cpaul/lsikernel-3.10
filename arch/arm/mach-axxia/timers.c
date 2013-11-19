@@ -61,9 +61,8 @@ axxia_timer_set_mode(enum clock_event_mode mode, struct clock_event_device *evt)
 	struct axxia_timer *timer = timer_to_clock_event(evt);
 	unsigned long ctrl = TIMER_CTRL_32BIT | TIMER_CTRL_IE;
 
-	printk(KERN_INFO
-	       "axxia_timer_set_mode: CPU#%d set mode %d on timer %s\n",
-	       smp_processor_id(), mode, timer->dev.name);
+	pr_info("axxia_timer_set_mode: CPU#%d set mode %d on timer %s\n",
+		smp_processor_id(), mode, timer->dev.name);
 
 	writel(ctrl, timer->base + TIMER_CTRL);
 
@@ -200,7 +199,7 @@ axxia_timer_clockevents_init(void __iomem *base,
 	if (WARN_ON(rate < 0))
 		return;
 
-	evt = kzalloc(sizeof *evt, GFP_KERNEL);
+	evt = kzalloc(sizeof(*evt), GFP_KERNEL);
 	if (evt == NULL)
 		return;
 

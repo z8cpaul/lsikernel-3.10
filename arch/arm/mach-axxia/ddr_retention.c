@@ -34,7 +34,6 @@
 #include <asm/cacheflush.h>
 #include <../../../drivers/misc/lsi-ncr.h>
 
-extern void flush_l3(void);
 static void __iomem *nca_address;
 static void __iomem *apb_base;
 
@@ -81,7 +80,7 @@ static void quiesce_vp_engine(void)
 	unsigned short node, target;
 	int loop;
 
-	printk(KERN_INFO "quiescing VP engines...\n");
+	pr_info("quiescing VP engines...\n");
 	pRegion = pCnalRegions;
 	while (*pRegion != NCP_REGION_ID(0xff, 0xff)) {
 
@@ -102,14 +101,13 @@ static void quiesce_vp_engine(void)
 
 		if ((ort == 0) && (owt == 0)) {
 			/* this engine has been quiesced, move on to the next */
-			printk(KERN_INFO "quiesced region 0x%02x.0x%02x\n",
+			pr_info("quiesced region 0x%02x.0x%02x\n",
 				node, target);
 			pRegion++;
 		} else {
 			if (loop++ > 10000) {
-				printk(KERN_INFO
-					"Unable to quiesce region 0x%02x.0x%02x ort=0x%x, owt=0x%x\n",
-				     node, target, ort, owt);
+				pr_info("Unable to quiesce region 0x%02x.0x%02x ort=0x%x, owt=0x%x\n",
+					node, target, ort, owt);
 				pRegion++;
 				loop = 0;
 				continue;
@@ -179,13 +177,13 @@ static inline void ncp_ddr_shutdown(void)
 	}
 
 	/* indicate DDR retention reset */
-	writel(0x00000001, apb_base + 0x300dc);	/* set bit 0 of persist_scratch */
+	writel(0x00000001, apb_base + 0x300dc);	/* set persist_scratch bit 0 */
 
 	/* issue chip reset */
-	writel(0x00000040, apb_base + 0x31004);	/* Intrnl Boot, 0xffff0000 Target */
+	writel(0x00000040, apb_base + 0x31004);	/* Internal Boot, 0xffff0000
+						   Target */
 	writel(0x80000000, apb_base + 0x3180c);	/* Set ResetReadDone */
 	writel(0x00080802, apb_base + 0x31008);	/* Chip Reset */
-
 }
 
 void initiate_retention_reset(void)
@@ -198,8 +196,8 @@ void initiate_retention_reset(void)
 
 	/* send stop message to other CPUs */
 	local_irq_disable();
-	asm volatile ("dsb":::"memory");
-	asm volatile ("dmb":::"memory");
+	asm volatile ("dsb" : : : "memory");
+	asm volatile ("dmb" : : : "memory");
 	system_state = SYSTEM_RESTART;
 	smp_send_stop();
 
@@ -209,16 +207,10 @@ void initiate_retention_reset(void)
 	quiesce_vp_engine();
 
 	/* disable sysmem interrupts */
-	printk("disabling sysmem interrupts\n");
+	pr_info("disabling sysmem interrupts\n");
 	value = 0;
 	ncr_write(NCP_REGION_ID(34, 0), 0x414, 4, &value);
 	ncr_write(NCP_REGION_ID(15, 0), 0x414, 4, &value);
-
-	/* flush L3 */
-#if 0
-	flush_cache_all();
-	flush_l3();
-#endif
 
 	/* unlock reset register for later */
 	apb_base = ioremap(0x2010000000, 0x40000);
@@ -246,11 +238,10 @@ void initiate_retention_reset(void)
 	 * this should cause the next few instructions to be fetched
 	 * into cache
 	 */
-	asm volatile ("dsb":::"memory");
+	asm volatile ("dsb" : : : "memory");
 	prefetch(ncp_ddr_shutdown);
 
 	ncp_ddr_shutdown();
-
 }
 
 static ssize_t axxia_ddr_retention_trigger(struct file *file,
@@ -268,14 +259,10 @@ static const struct file_operations axxia_ddr_retention_proc_ops = {
 
 void axxia_ddr_retention_init(void)
 {
-#ifndef CONFIG_ARCH_AXXIA_SIM
 	if (!proc_create("driver/axxia_ddr_retention_reset", S_IWUSR, NULL,
 			 &axxia_ddr_retention_proc_ops))
-		printk(KERN_INFO
-			"Failed to register DDR retention proc interface\n");
-#endif
+		pr_info("Failed to register DDR retention proc interface\n");
 }
-
 EXPORT_SYMBOL(initiate_retention_reset);
 
 #else
@@ -285,4 +272,4 @@ void axxia_ddr_retention_init(void)
 	return;
 }
 
-#endif
+#endif /* CONFIG_ARCH_AXXIA_SIM */
