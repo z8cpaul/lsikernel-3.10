@@ -284,10 +284,6 @@ static int ci13612_ehci_probe(struct platform_device *pdev)
 	} else {
 		/* Set address bits [39:32] to zero */
 		writel(0x0, gpreg_base + 0x8);
-#ifndef CONFIG_LSI_USB_SW_WORKAROUND
-		/* hprot pass-through (let the controller drive hprot[0:3] */
-		writel(0x100, gpreg_base + 0x74);
-#endif
 		iounmap(gpreg_base);
 	}
 
