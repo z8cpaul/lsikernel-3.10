@@ -28,8 +28,14 @@
 		clkdev_add(cl); \
 	} while (0)
 
-#ifdef CONFIG_ARCH_AXXIA_SIM
+/*
+  ------------------------------------------------------------------------------
+  axxia_init_clocks
 
+  Clock setup for Emulation/ASIC systems.
+*/
+
+#ifdef CONFIG_ARCH_AXXIA_SIM
 void __init
 axxia_init_clocks(void)
 {
@@ -82,19 +88,7 @@ axxia_init_clocks(void)
 	clk_register_clkdev(clk, NULL, "mmci");
 }
 
-#else
-
-static struct of_device_id cpu_pll[] __initconst = {
-	{ .name = "/clocks/cpu", },
-	{},
-};
-
-/*
-  --------------------------------------------------------------------
-  axxia_init_clocks
-
-  Clock setup for Emulation/ASIC systems.
-*/
+#else /* !CONFIG_ARCH_AXXIA_SIM */
 
 void __init
 axxia_init_clocks(void)
@@ -108,7 +102,7 @@ axxia_init_clocks(void)
 
 	if (np) {
 		if (of_property_read_u32(np, "frequency", &frequency))
-			printk(KERN_ERR "%d - Error!", __LINE__);
+			pr_err("%d - Error!", __LINE__);
 	}
 
 	clk = clk_register_fixed_rate(NULL, "clk_cpu", NULL,
@@ -118,7 +112,7 @@ axxia_init_clocks(void)
 
 	if (np) {
 		if (of_property_read_u32(np, "frequency", &frequency))
-			printk(KERN_ERR "%d - Error!", __LINE__);
+			pr_err("%d - Error!", __LINE__);
 	}
 
 	clk = clk_register_fixed_rate(NULL, "clk_per", NULL,
@@ -148,7 +142,7 @@ axxia_init_clocks(void)
 
 	if (np) {
 		if (of_property_read_u32(np, "frequency", &frequency))
-			printk(KERN_ERR "%d - Error!", __LINE__);
+			pr_err("%d - Error!", __LINE__);
 	}
 
 	clk = clk_register_fixed_rate(NULL, "clk_mmci", NULL,
@@ -173,4 +167,4 @@ axxia_init_clocks(void)
 	return;
 }
 
-#endif
+#endif /* CONFIG_ARCH_AXXIA_SIM */

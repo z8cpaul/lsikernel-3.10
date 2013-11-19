@@ -67,12 +67,12 @@ axxia_add_i2c_bus(
 	if (!of_property_read_u32(np, "port", (u32 *)&pval)) {
 		portno = pval;
 	} else {
-		printk(KERN_ERR "I2C: Can't find port number for %s\n",
+		pr_err("I2C: Can't find port number for %s\n",
 			np->full_name);
 		return -ENXIO;
 	}
 	if (portno > axxia_i2cx_port_count) {
-		printk(KERN_ERR "I2C: port number out of range for %s\n",
+		pr_err("I2C: port number out of range for %s\n",
 			np->full_name);
 		return -ENXIO;
 	}
@@ -85,7 +85,7 @@ axxia_add_i2c_bus(
 	/* Verify device type */
 	val = of_get_property(np, "device_type", NULL);
 	if (strcmp(val, "i2c")) {
-		printk(KERN_ERR "I2C%d: missing or incorrect device_type for %s\n",
+		pr_err("I2C%d: missing or incorrect device_type for %s\n",
 			portno, np->full_name);
 		return -ENXIO;
 	}
@@ -109,7 +109,7 @@ axxia_add_i2c_bus(
 
 	/* Fetch config space registers address */
 	if (of_address_to_resource(np, 0, &pdata->dev_space)) {
-		printk(KERN_ERR "%s: Can't get I2C device space !",
+		pr_err("%s: Can't get I2C device space !",
 			np->full_name);
 		return -ENXIO;
 	}
@@ -120,19 +120,15 @@ axxia_add_i2c_bus(
 	pdata->int_space.flags = IORESOURCE_IRQ;
 
 	if (pdata->bus_nr == ~0) {
-		printk(KERN_INFO
-			"I2C Port %d found; bus#=<auto> '%s'\n",
+		pr_info("I2C Port %d found; bus#=<auto> '%s'\n",
 			portno, pdata->name);
 	} else {
-		printk(KERN_INFO
-			"I2C Port %d found; bus#=i%d '%s'\n",
+		pr_info("I2C Port %d found; bus#=i%d '%s'\n",
 			portno, pdata->bus_nr, pdata->name);
 	}
-	printk(KERN_INFO
-	    "  dev_space start = 0x%012llx, end = 0x%012llx\n",
-	    pdata->dev_space.start, pdata->dev_space.end);
-	printk(KERN_INFO
-	    "  mappedIrq#=%x\n", (unsigned int)pdata->int_space.start);
+	pr_info("  dev_space start = 0x%012llx, end = 0x%012llx\n",
+		pdata->dev_space.start, pdata->dev_space.end);
+	pr_info("  mappedIrq#=%x\n", (unsigned int)pdata->int_space.start);
 
 	/* Fill in the device */
 	pdev->id = ndx;
@@ -140,11 +136,6 @@ axxia_add_i2c_bus(
 	pdev->num_resources = 2;
 	pdev->resource = &pdata->dev_space;
 	pdev->dev.platform_data = pdata;
-
-	/* printk(KERN_INFO
-	    "pdev: id=%d name='%s' n_r=%d res=%p d.p_d=%p\n",
-	    pdev->id, pdev->name, pdev->num_resources,
-	    pdev->resource, pdev->dev.platform_data); */
 
 	return 0;
 }
@@ -176,7 +167,7 @@ axxia_register_i2c_busses(
 				   sizeof(struct axxia_i2c_bus_platform_data),
 				   GFP_KERNEL);
 	if (!axxia_i2cx_ports) {
-		printk(KERN_WARNING "I2C: failed to allocate ports array\n");
+		pr_warn("I2C: failed to allocate ports array\n");
 		return -ENOMEM;
 	}
 	memset(axxia_i2cx_ports, 0,
@@ -187,7 +178,7 @@ axxia_register_i2c_busses(
 				     sizeof(struct platform_device),
 				     GFP_KERNEL);
 	if (!axxia_i2cx_devices) {
-		printk(KERN_WARNING "I2C: failed to allocate devices array\n");
+		pr_warn("I2C: failed to allocate devices array\n");
 		return -ENOMEM;
 	}
 	memset(axxia_i2cx_devices, 0,
@@ -197,8 +188,7 @@ axxia_register_i2c_busses(
 					 sizeof(struct platform_device *),
 					 GFP_KERNEL);
 	if (!axxia_i2cx_device_ptrs) {
-		printk(KERN_WARNING
-			"I2C: failed to allocate device ptrs array\n");
+		pr_warn("I2C: failed to allocate device ptrs array\n");
 		return -ENOMEM;
 	}
 	memset(axxia_i2cx_device_ptrs, 0,

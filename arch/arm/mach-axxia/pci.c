@@ -47,8 +47,8 @@
 #define PCIE_MPAGE_U(n)          (0x1010 + (n * 8)) /* n = 0..7 */
 #define PCIE_MPAGE_L(n)          (0x1014 + (n * 8)) /* n = 0..7 */
 #define PCIE_TPAGE_BAR0(n)       (0x1050 + (n * 4)) /* n = 0..7 */
-#define   PCIE_TPAGE_32          (0<<31) /* AXI 32-bit access */
-#define   PCIE_TPAGE_128	 (1<<31) /* AXI 128-bit access */
+#define     PCIE_TPAGE_32        (0<<31) /* AXI 32-bit access */
+#define     PCIE_TPAGE_128       (1<<31) /* AXI 128-bit access */
 #define PCIE_TPAGE_BAR1(n)       (0x1070 + (n * 4)) /* n = 0..7 */
 #define PCIE_TPAGE_BAR2(n)       (0x1090 + (n * 4)) /* n = 0..7 */
 #define PCIE_MSG_IN_FIFO         (0x10B0)
@@ -144,7 +144,7 @@ struct axxia_pciex_port {
 static struct axxia_pciex_port *axxia_pciex_ports;
 
 
-static void __init
+static void
 fixup_axxia_pci_bridge(struct pci_dev *dev)
 {
 	/* if we aren't a PCIe don't bother */
@@ -169,7 +169,6 @@ static struct axxia_pciex_port *bus_to_port(struct pci_bus *bus)
 {
 	return axxia_pciex_ports + pci_domain_nr(bus);
 }
-
 
 /*
  * Validate the Bus#/Device#/Function#
@@ -312,8 +311,7 @@ arm_pciex_axxia_read_config(struct pci_bus *bus,
 	}
 
 #ifdef PRINT_CONFIG_ACCESSES
-	printk(KERN_INFO
-		"acp_read_config for PCIE%d: %3d  fn=0x%04x o=0x%04x l=%d "
+	pr_info("acp_read_config for PCIE%d: %3d  fn=0x%04x o=0x%04x l=%d "
 		"a=0x%08x v=0x%08x, dev=%d\n",
 			port->index, bus->number, devfn, offset, len,
 			bus_addr, *val, PCI_SLOT(devfn));
@@ -378,8 +376,7 @@ arm_pciex_axxia_write_config(struct pci_bus *bus,
 	}
 
 #ifdef PRINT_CONFIG_ACCESSES
-	printk(KERN_INFO
-		"acp_write_config: bus=%3d devfn=0x%04x offset=0x%04x len=%d"
+	pr_info("acp_write_config: bus=%3d devfn=0x%04x offset=0x%04x len=%d"
 		"addr=0x%08x val=0x%08x\n",
 		bus->number, devfn, offset, len, bus_addr, val);
 #endif
@@ -562,7 +559,6 @@ pcie_pei0_msi_handler(unsigned int irq, struct irq_desc *desc)
 	irq_desc_get_chip(desc)->irq_eoi(&desc->irq_data);
 }
 
-
 /* PCIe setup function */
 static int axxia_pcie_setup(int portno, struct pci_sys_data *sys)
 {
@@ -743,7 +739,7 @@ pcie_alloc_msi_table(struct pci_dev *pdev, struct axxia_pciex_port *port)
 /*
  * Scan PCIe bus
  */
-static struct pci_bus __init *
+static struct pci_bus *
 axxia_pcie_scan_bus(int nr, struct pci_sys_data *sys)
 {
 	if (WARN_ON(nr >= PCIE_MAX_PORTS))
@@ -755,7 +751,7 @@ axxia_pcie_scan_bus(int nr, struct pci_sys_data *sys)
 
 
 
-static int __init
+static int
 axxia_pcie_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
 {
 	struct pci_sys_data *sys = dev->sysdata;
@@ -772,13 +768,11 @@ static struct irq_chip axxia_msi_chip = {
 	.irq_unmask  = unmask_msi_irq,
 };
 
-
 /* Port definition struct */
 static struct hw_pci axxia_pcie_hw[] = {
 	[0] = {
 		.nr_controllers = 1,
 		.domain = 0,
-		.swizzle = pci_std_swizzle,
 		.setup = axxia_pcie_setup,
 		.scan = axxia_pcie_scan_bus,
 		.map_irq = axxia_pcie_map_irq
@@ -786,7 +780,6 @@ static struct hw_pci axxia_pcie_hw[] = {
 	[1] = {
 		.nr_controllers = 1,
 		.domain = 1,
-		.swizzle = pci_std_swizzle,
 		.setup = axxia_pcie_setup,
 		.scan = axxia_pcie_scan_bus,
 		.map_irq = axxia_pcie_map_irq
@@ -824,7 +817,7 @@ axxia_probe_pciex_bridge(struct device_node *np)
 
 	port = &axxia_pciex_ports[portno];
 	port->index = portno;
-	snprintf(port->name, sizeof port->name - 1, "PCIE%d", portno);
+	snprintf(port->name, sizeof(port->name) - 1, "PCIE%d", portno);
 	port->node = of_node_get(np);
 
 	/* Check if device_type property is set to "pci" or "pci-endpoint".
@@ -933,7 +926,6 @@ axxia_probe_pciex_bridge(struct device_node *np)
 		portno,
 		port->pci_bar,
 		port->inbound.start, port->inbound.end);
-
 }
 
 /*
