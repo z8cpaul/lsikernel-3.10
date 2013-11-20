@@ -26,6 +26,9 @@
 extern int ubootenv_get(const char *, char *);
 #endif
 
+extern int acp_mdio_read(unsigned long, unsigned long, unsigned short *, int);
+extern int acp_mdio_write(unsigned long, unsigned long, unsigned short, int);
+
 /*
  * This is the maximum number of packets to be received every
  * NAPI poll

@@ -86,7 +86,6 @@
 #include <linux/uaccess.h>
 #include <linux/io.h>
 #include <asm/dma.h>
-#include <asm/lsi/acp_ncr.h>
 
 #include "lsi_acp_net.h"
 #include "../../../misc/lsi-ncr.h"
@@ -1991,7 +1990,10 @@ static int appnic_drv_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id appnic_dt_ids[] = {
-	{ .compatible = "lsi,acp-femac", }
+	{ .compatible = "lsi,acp-femac", },
+	{ .compatible = "acp-femac", },
+	{ /* end of list */ },
+
 };
 MODULE_DEVICE_TABLE(of, appnic_dt_ids);
 
