@@ -245,6 +245,7 @@ static struct spi_board_info spi_devs[] __initdata = {
 	}
 };
 
+#ifndef CONFIG_ARCH_AXXIA_SIM
 static int
 l3_set_pstate(void __iomem *l3ctrl, unsigned int req, unsigned int act)
 {
@@ -273,6 +274,7 @@ l3_set_pstate(void __iomem *l3ctrl, unsigned int req, unsigned int act)
 
 	return 0;
 }
+#endif
 
 static int
 axxia_bus_notifier(struct notifier_block *nb, unsigned long event, void *obj)
@@ -300,11 +302,11 @@ static struct notifier_block axxia_amba_nb = {
 
 void __init axxia_dt_init(void)
 {
+#ifndef CONFIG_ARCH_AXXIA_SIM
 	void __iomem *l3ctrl;
 	int rc;
 
 	/* Enable L3-cache */
-#ifndef CONFIG_ARCH_AXXIA_SIM
 	l3ctrl = ioremap(0x2000000000ULL, SZ_4M);
 	if (l3ctrl) {
 		rc = l3_set_pstate(l3ctrl, 0x3, 0xc);
