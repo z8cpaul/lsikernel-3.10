@@ -665,6 +665,7 @@ static void __init acp_configure_pciex_POMs(struct pciex_port *port,
 	/* Setup outbound memory windows */
 	for (i = j = 0; i < 3; i++) {
 		struct resource *res = &hose->mem_resources[i];
+		resource_size_t offset = hose->mem_offset[i];
 
 		/* we only care about memory windows */
 		if (!(res->flags & IORESOURCE_MEM))
@@ -677,17 +678,17 @@ static void __init acp_configure_pciex_POMs(struct pciex_port *port,
 
 		/* Configure the resource */
 		if (acp_setup_one_pciex_POM(port, hose, mbase,
-					res->start,
-				       res->start - hose->pci_mem_offset,
-				       resource_size(res),
-				       res->flags,
-				       j) == 0) {
+					    res->start,
+					    res->start - offset,
+					    resource_size(res),
+					    res->flags,
+					    j) == 0) {
 			j++;
 
 			/* If the resource PCI address is 0 then we have our
 			 * ISA memory hole
 			 */
-			if (res->start == hose->pci_mem_offset)
+			if (res->start == offset)
 				found_isa_hole = 1;
 		}
 	}
