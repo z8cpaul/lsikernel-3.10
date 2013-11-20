@@ -97,7 +97,7 @@
                                 clock-frequency = <0xbebc200>;
                                 current-speed = <9600>;
                                 interrupt-parent = <&MPIC>;
-                                interrupts = <22>;
+                                interrupts = <22 4>;
                         };
                         UART1: serial@00405000 {
                                 device_type = "serial";
@@ -108,7 +108,7 @@
                                 clock-frequency = <200000000>;
                                 current-speed = <9600>;
                                 interrupt-parent = <&MPIC>;
-                                interrupts = <23>;
+                                interrupts = <23 4>;
                         };
                         USB0: usb@004a4000 {
                                 device_type = "usb";
@@ -116,21 +116,21 @@
                                 enabled = <0>;
                                 reg = <0x004a4000 0x00020000>;
                                 interrupt-parent = <&MPIC>;
-                                interrupts = <31>;
+                                interrupts = <31 4>;
                         };
                         I2C: i2c@00403000 {
                                 compatible = "acp-i2c";
                                 enabled = <0>;
                                 reg = <0x00403000 0x00001000>;
                                 interrupt-parent = <&MPIC>;
-                                interrupts = <21>;
+                                interrupts = <21 4>;
                         };
                         SSP: ssp@00402000 {
                                 compatible = "acp-ssp";
                                 enabled = <0>;
                                 reg = <0x00402000 0x00001000>;
                                 interrupt-parent = <&MPIC>;
-                                interrupts = <20>;
+                                interrupts = <20 4>;
                         };
                         NAND: nand@00440000 {
                                 device_type = "nand";
@@ -147,7 +147,7 @@
                                        0x00481000 0x1000
                                        0x00482000 0x1000>;
                                 interrupt-parent = <&MPIC>;
-                                interrupts = <33>;
+                                interrupts = <33 4>;
                                 mdio-reg = <0x00409000 0x1000>;
                                 // The following will get filled in by
                                 // the boot loader.
