@@ -279,6 +279,33 @@
 				     <0 52 4>,
 				     <0 53 4>;
 		};
+
+		gpio@2010092000 {
+			compatible = "arm,pl061", "arm,primecell";
+			reg = <0x20 0x10092000 0x00 0x1000>;
+			interrupts = <0 10 4>,
+				     <0 11 4>,
+				     <0 12 4>,
+				     <0 13 4>,
+				     <0 14 4>,
+				     <0 15 4>,
+				     <0 16 4>,
+				     <0 17 4>;
+		};
+
+		gpio@2010093000 {
+			compatible = "arm,pl061", "arm,primecell";
+			reg = <0x20 0x10093000 0x00 0x1000>;
+			interrupts = <0 18 4>;
+		};
+
+		ssp@2010088000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "arm,pl022", "arm,primecell";
+			reg = <0x20 0x10088000 0x00 0x1000>;
+			interrupts = <0 42 4>;
+		};
 	};
 
 	I2C0: i2c@0x02010084000 {
