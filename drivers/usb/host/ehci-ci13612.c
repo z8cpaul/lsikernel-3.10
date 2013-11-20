@@ -227,7 +227,9 @@ static int ci13612_ehci_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct usb_hcd *hcd;
+#ifdef CONFIG_ARM
 	void __iomem *gpreg_base;
+#endif
 	int irq;
 	int retval;
 	struct resource *res;
@@ -275,6 +277,7 @@ static int ci13612_ehci_probe(struct platform_device *pdev)
 		goto fail_put_hcd;
 	}
 
+#ifdef CONFIG_ARM
 	gpreg_base = of_iomap(np, 1);
 	if (!gpreg_base) {
 		dev_warn(&pdev->dev, "of_iomap error can't map region 1\n");
@@ -285,6 +288,7 @@ static int ci13612_ehci_probe(struct platform_device *pdev)
 		writel(0x0, gpreg_base + 0x8);
 		iounmap(gpreg_base);
 	}
+#endif
 
 	retval = usb_add_hcd(hcd, irq, 0);
 	if (retval == 0) {
