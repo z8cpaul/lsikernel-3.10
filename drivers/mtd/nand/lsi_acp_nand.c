@@ -3159,6 +3159,7 @@ lsi_nand_set_config(struct mtd_info *mtd, struct nand_chip *chip)
 		chip->ecc.layout = &lsi_2k_1bit_ecclayout;
 		chip->ecc.size = mtd->writesize;
 		chip->ecc.bytes = chip->ecc.layout->eccbytes;
+		chip->ecc.strength = 1;
 	} else if (LSI_NAND_EP501G1 == lsi_nand_type) {
 		/* The EP501G1 only supports 512, 2k, and 4k page sizes, */
 		if (512 != mtd->writesize &&
@@ -3257,6 +3258,8 @@ lsi_nand_set_config(struct mtd_info *mtd, struct nand_chip *chip)
 		else
 			chip->ecc.bytes = chip->ecc.layout->eccbytes;
 
+		chip->ecc.strength = 4;
+
 	} else if (LSI_NAND_EP501G3 == lsi_nand_type) {
 		/* The EP501G3 only supports 2k, 4k, and 8k page sizes, */
 		if (2048 != mtd->writesize &&
@@ -3338,6 +3341,7 @@ lsi_nand_set_config(struct mtd_info *mtd, struct nand_chip *chip)
 		config |= (chip->ecc.layout->eccbytes / 4) << 16;
 		chip->ecc.size = mtd->writesize;
 		chip->ecc.bytes = chip->ecc.layout->eccbytes;
+		chip->ecc.strength = 4;
 	} else {
 		return -1;
 	}
