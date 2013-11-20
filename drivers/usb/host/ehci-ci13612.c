@@ -318,7 +318,11 @@ static struct of_device_id ci13612_match[] = {
 		.type	= "usb",
 		.compatible = "lsi,acp-usb",
 	},
-	{},
+	{
+		.type	= "usb",
+		.compatible = "acp-usb",
+	},
+	{ /* end of list */ },
 };
 
 static struct platform_driver ci13612_ehci_driver = {
