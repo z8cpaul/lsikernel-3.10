@@ -32,11 +32,13 @@
 #include "ehci-ci13612.h"
 
 
+static int ci13612_ehci_halt(struct ehci_hcd *ehci);
+
 #ifdef CONFIG_LSI_USB_SW_WORKAROUND
 static void ci13612_usb_setup(struct usb_hcd *hcd)
 {
 	int USB_TXFIFOTHRES, VUSB_HS_TX_BURST;
-	u32 device_mode;
+	u32 devicemode;
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 	u32 txfulltuning = 0;
 
@@ -55,18 +57,18 @@ static void ci13612_usb_setup(struct usb_hcd *hcd)
 	 * Unspecified Length Bursts by setting SBUSCFG to 0x0, or use stream
 	 * disable mode by setting USBMODE.SDIS to 0x1.
 	 */
-	device_mode = ehci_readl(ehci, hcd->regs + 0x1A8);
+	devicemode = ehci_readl(ehci, hcd->regs + 0x1A8);
 
-	if ((device_mode & 0x3) == 0x2) {
+	if ((devicemode & 0x3) == 0x2) {
 		/* device mode */
 		writel(0x0, hcd->regs + 0x90);
-	} else if ((device_mode & 0x3) == 0x3) {
+	} else if ((devicemode & 0x3) == 0x3) {
 		/* host mode */
 		writel(0x6, hcd->regs + 0x90);
 	}
 
-	pr_info("ehci-ci13612 (ci13612_usb_setup): VUSB_HS_TX_BURST = 0x%x,"
-		"USB_TXFIFOTHRES = 0x%x\n", VUSB_HS_TX_BURST, USB_TXFIFOTHRES);
+	pr_err("ehci-ci13612 (ci13612_usb_setup): VUSB_HS_TX_BURST = 0x%x,USB_TXFIFOTHRES = 0x%x\n",
+			VUSB_HS_TX_BURST, USB_TXFIFOTHRES);
 	return;
 }
 #endif
@@ -102,7 +104,7 @@ static int ci13612_ehci_init(struct usb_hcd *hcd)
 	ehci->sbrn = 0x20;
 
 	/* Reset is only allowed on a stopped controller */
-	ehci_halt(ehci);
+	ci13612_ehci_halt(ehci);
 
 	/* reset controller */
 	ehci_reset(ehci);
@@ -136,8 +138,7 @@ ci13612_fixup_usbcmd_rs(struct ehci_hcd *ehci)
 	port_status = ehci_readl(ehci, &ehci->regs->port_status[0]);
 	pr_info("ehci-ci13612: port_status = 0x%x\n", port_status);
 	if (port_status & 0x100) {
-		pr_err("ehci-ci13612: USB port is in reset status, "
-		       "not able to change HC status to run\n");
+		pr_err("ehci-ci13612: USB port is in reset status, not able to change HC status to run\n");
 		return -EFAULT;
 	}
 	return 0;
@@ -169,7 +170,7 @@ ci13612_fixup_txpburst(struct ehci_hcd *ehci)
 	ehci_writel(ehci, burst_size, &ehci->regs->reserved1[1]);
 }
 #else
-#define ci13612_fixup_txpburst(ehci) do { (void)ehci; } while (0)
+#define ci13612_fixup_txpburst(ehci) do { (void)ehci; } while(0)
 #endif
 
 static int ci13612_ehci_run(struct usb_hcd *hcd)
@@ -182,8 +183,11 @@ static int ci13612_ehci_run(struct usb_hcd *hcd)
 	if (retval)
 		return retval;
 
+
+#ifndef CONFIG_LSI_USB_SW_WORKAROUND
 	/* Setup AMBA interface to force INCR16 busts when possible */
 	writel(3, USB_SBUSCFG);
+#endif
 
 	retval = ehci_run(hcd);
 	if (retval)
@@ -191,10 +195,12 @@ static int ci13612_ehci_run(struct usb_hcd *hcd)
 
 	ci13612_fixup_txpburst(ehci);
 
+#ifndef CONFIG_LSI_USB_SW_WORKAROUND
 	/* Set ITC (bits [23:16]) to zero for interrupt on every micro-frame */
 	tmp = ehci_readl(ehci, &ehci->regs->command);
 	tmp &= 0xFFFF;
 	ehci_writel(ehci, tmp & 0xFFFF, &ehci->regs->command);
+#endif
 
 	return retval;
 }
@@ -227,9 +233,7 @@ static int ci13612_ehci_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct usb_hcd *hcd;
-#ifdef CONFIG_ARM
 	void __iomem *gpreg_base;
-#endif
 	int irq;
 	int retval;
 	struct resource *res;
@@ -239,6 +243,7 @@ static int ci13612_ehci_probe(struct platform_device *pdev)
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {
+		dev_dbg(&pdev->dev, "error getting irq number\n");
 		retval = irq;
 		goto fail_create_hcd;
 	}
@@ -256,12 +261,15 @@ static int ci13612_ehci_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
+
+#ifndef CONFIG_LSI_USB_SW_WORKAROUND
 	/* Device using 32-bit addressing */
 	pdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
 	pdev->dev.dma_mask = &pdev->dev.coherent_dma_mask;
+#endif
 
-	hcd = usb_create_hcd(&ci13612_hc_driver, &pdev->dev,
-			     dev_name(&pdev->dev));
+	hcd = usb_create_hcd(&ci13612_hc_driver,
+			&pdev->dev, dev_name(&pdev->dev));
 	if (!hcd) {
 		retval = -ENOMEM;
 		goto fail_create_hcd;
@@ -277,7 +285,6 @@ static int ci13612_ehci_probe(struct platform_device *pdev)
 		goto fail_put_hcd;
 	}
 
-#ifdef CONFIG_ARM
 	gpreg_base = of_iomap(np, 1);
 	if (!gpreg_base) {
 		dev_warn(&pdev->dev, "of_iomap error can't map region 1\n");
@@ -286,9 +293,12 @@ static int ci13612_ehci_probe(struct platform_device *pdev)
 	} else {
 		/* Set address bits [39:32] to zero */
 		writel(0x0, gpreg_base + 0x8);
+#ifndef CONFIG_LSI_USB_SW_WORKAROUND
+		/* hprot cachable and bufferable */
+		writel(0xc, gpreg_base + 0x74);
+#endif
 		iounmap(gpreg_base);
 	}
-#endif
 
 	retval = usb_add_hcd(hcd, irq, 0);
 	if (retval == 0) {
@@ -315,6 +325,18 @@ static int ci13612_ehci_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int ci13612_ehci_halt(struct ehci_hcd *ehci)
+{
+	u32     temp;
+
+	temp = ehci_readl(ehci, &ehci->regs->command);
+	temp &= ~CMD_RUN;
+	ehci_writel(ehci, temp, &ehci->regs->command);
+
+	return handshake(ehci, &ehci->regs->status,
+		STS_HALT, STS_HALT, 16 * 125);
+}
+
 MODULE_ALIAS("platform:ci13612-ehci");
 
 static struct of_device_id ci13612_match[] = {
@@ -326,7 +348,7 @@ static struct of_device_id ci13612_match[] = {
 		.type	= "usb",
 		.compatible = "acp-usb",
 	},
-	{ /* end of list */ },
+	{},
 };
 
 static struct platform_driver ci13612_ehci_driver = {
@@ -336,4 +358,5 @@ static struct platform_driver ci13612_ehci_driver = {
 		.name = "ci13612-ehci",
 		.of_match_table = ci13612_match,
 	},
+
 };
