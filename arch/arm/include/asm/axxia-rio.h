@@ -94,21 +94,32 @@ static inline u32 CNTLZW(u32 val)
 	int n = 0;
 	if (val == 0)
 		return 32;
-	if ((val & 0xFFFF0000) == 0)
-		n += 16; val = val << 16;
+
+	if ((val & 0xFFFF0000) == 0) {
+		n += 16;
+		val = val << 16;
+	}
 		/* 1111 1111 1111 1111 0000 0000 0000 0000
 		// 16 bits from left are zero! so we omit 16 left bits */
-	if ((val & 0xFF000000) == 0)
-		n = n + 8; val = val << 8;
+	if ((val & 0xFF000000) == 0) {
+		n = n + 8;
+		val = val << 8;
+	}
 		/* 8 left bits are 0 */
-	if ((val & 0xF0000000) == 0)
-		n = n + 4; val = val << 4;
+	if ((val & 0xF0000000) == 0) {
+		n = n + 4;
+		val = val << 4;
+	}
 		/* 4 left bits are 0 */
-	if ((val & 0xC0000000) == 0)
-		n = n + 2, val = val << 2;
+	if ((val & 0xC0000000) == 0) {
+		n = n + 2;
+		val = val << 2;
+	}
 		/* 110000....0 2 left bits are zero */
-	if ((val & 0x80000000) == 0)
-		n = n + 1, val = val << 1;
+	if ((val & 0x80000000) == 0) {
+		n = n + 1;
+		val = val << 1;
+	}
 		/* first left bit is zero */
 	return n;
 }

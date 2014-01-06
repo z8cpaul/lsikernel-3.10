@@ -1305,7 +1305,7 @@ static int open_outb_mbox(struct rio_mport *mport, void *dev_id, int dme_no,
 	u64 descChainStart, descAddr;
 	int buf_sz = 0;
 
-	if (entries > priv->desc_max_entries)
+	if ((entries <= 0) || (entries > priv->desc_max_entries))
 		return -EINVAL;
 
 	if (test_bit(RIO_IRQ_ENABLED, &h->state))
@@ -1660,7 +1660,7 @@ static int open_inb_mbox(struct rio_mport *mport, void *dev_id,
 	if ((mbox < 0) || (mbox >= RIO_MAX_RX_MBOX))
 		return -EINVAL;
 
-	if (entries > priv->desc_max_entries)
+	if ((entries <= 0) || (entries > priv->desc_max_entries))
 		return -EINVAL;
 
 	h = &priv->ib_dme_irq[mbox];
