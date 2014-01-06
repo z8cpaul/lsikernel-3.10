@@ -1548,8 +1548,10 @@ static void ib_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 					 DESC_TABLE_W0(desc->desc_no), &dw0);
 			}
 
-			if ((dw0 & DME_DESC_DW0_READY_MASK) &&
-			    (dw0 & DME_DESC_DW0_VALID)) {
+			if (dw0 & DME_DESC_DW0_READY_MASK) {
+
+				/* Some chips clear this bit, some don't.
+				** Make sure in any event. */
 				if (!priv->internalDesc) {
 					*((u32 *)DESC_TABLE_W0_MEM(me,
 							 desc->desc_no)) =
@@ -1559,6 +1561,7 @@ static void ib_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 						DESC_TABLE_W0(desc->desc_no),
 						dw0 & ~DME_DESC_DW0_VALID);
 				}
+
 				__ib_dme_dw_dbg(priv, dw0);
 				__ib_dme_event_dbg(priv, dme_no,
 						   1 << RIO_IB_DME_RX_PUSH);
