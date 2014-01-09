@@ -182,14 +182,12 @@ static void __init axxia_smp_prepare_cpus(unsigned int max_cpus)
 				writel(0xab, apb2_ser3_base+0x1000);
 				tmp &= ~(1 << phys_cpu);
 				writel(tmp, apb2_ser3_base+0x1010);
-				pr_info("cpu%d: Released from reset (bit %d)\n", cpu, phys_cpu);
 			}
 		}
 
 		if (cpu_count < max_cpus) {
 			set_cpu_present(cpu, true);
 			cpu_count++;
-			pr_info("cpu%d: Is present (count %d))\n", cpu, cpu_count);
 		}
 
 		/*
@@ -199,7 +197,6 @@ static void __init axxia_smp_prepare_cpus(unsigned int max_cpus)
 		 */
 		if (release_phys != 0) {
 			release_virt = (u32 *)phys_to_virt(release_phys);
-			pr_info("cpu%d: Release addr phys %#x virt %p\n", cpu, release_phys, release_virt);
 			*release_virt = virt_to_phys(axxia_secondary_startup);
 			smp_wmb();
 			__cpuc_flush_dcache_area(release_virt, sizeof(u32));
