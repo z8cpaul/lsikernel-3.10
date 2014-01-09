@@ -1568,6 +1568,7 @@ struct rio_dev *rio_get_asm(u16 vid, u16 did,
 		}
 		kfree(nptr);
 		mport = rio_get_mport(RIO_ANY_ID, mport);
+		key = 0;
 	}
 	rdev = NULL;
 done:
@@ -1576,6 +1577,7 @@ done:
 	rcu_read_unlock();
 	return rdev;
 }
+
 /**
  * rio_get_device - Begin or continue searching for a RIO device by vid/did
  * @vid: RIO vid to match or %RIO_ANY_ID to match all vids
@@ -1721,7 +1723,7 @@ static void rio_fixup_device(struct rio_dev *dev)
 {
 }
 
-static int rio_init(void)
+static int __devinit rio_init(void)
 {
 	struct rio_dev *dev = NULL;
 
@@ -1734,7 +1736,7 @@ static int rio_init(void)
  * @note No lock; Assuming this is used at boot time only,
  *       before start of user space
  */
-int rio_init_mports(void)
+int __devinit rio_init_mports(void)
 {
 	struct rio_mport *port;
 

@@ -1619,7 +1619,7 @@ static int axxia_rio_setup(struct platform_device *dev)
 			  &irq, &linkdown_reset))
 		return -EFAULT;
 
-	rc = axxia_rapidio_board_init(ndx, &portNdx);
+	rc = axxia_rapidio_board_init(dev, ndx, &portNdx);
 	if (rc != 0)
 		return rc;
 

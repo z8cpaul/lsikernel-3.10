@@ -5,6 +5,8 @@
 #ifndef __ASM_AXXIA_RIO_H__
 #define __ASM_AXXIA_RIO_H__
 
+#include <linux/platform_device.h>
+
 /* Constants, Macros, etc. */
 
 #define AXXIA_RIO_SMALL_SYSTEM
@@ -76,7 +78,8 @@ extern int axxia_rio_apio_disable(struct rio_mport *mport);
 extern int axxia_rio_rpio_enable(struct rio_mport *mport, u32 mask, u32 bits);
 extern int axxia_rio_rpio_disable(struct rio_mport *mport);
 
-extern int axxia_rapidio_board_init(int devNum, int *portNdx);
+extern int axxia_rapidio_board_init(struct platform_device *dev, int devNum,
+				    int *portNdx);
 
 
 /*****************************/

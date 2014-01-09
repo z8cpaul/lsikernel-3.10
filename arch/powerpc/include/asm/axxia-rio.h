@@ -5,6 +5,8 @@
 #ifndef __ASM_AXXIA_RIO_H__
 #define __ASM_AXXIA_RIO_H__
 
+#include <linux/platform_device.h>
+
 /* Constants, Macros, etc. */
 
 #define AXXIA_RIO_SYSMEM_BARRIER()      __asm__ __volatile__("msync")
@@ -67,7 +69,8 @@ extern int axxia_rio_apio_disable(struct rio_mport *mport);
 extern int axxia_rio_rpio_enable(struct rio_mport *mport, u32 mask, u32 bits);
 extern int axxia_rio_rpio_disable(struct rio_mport *mport);
 
-static inline int axxia_rapidio_board_init(int devNum, int *portNdx)
+static inline int axxia_rapidio_board_init(struct platform_device *dev,
+					   int devNum, int *portNdx)
 {
 	(*portNdx) = 0;
 	return 0;

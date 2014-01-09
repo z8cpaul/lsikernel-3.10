@@ -38,6 +38,7 @@
  * axxia_rapidio_board_init -
  *   Perform board-specific initialization to support use of RapidIO busses
  *
+ * @dev:     [IN] RIO platform device
  * @ndx:     [IN] Which instance of SRIOC driver needs support
  * @portNdx: [OUT] Which port to use for the specified controller
  *
@@ -45,24 +46,34 @@
  */
 int
 axxia_rapidio_board_init(
+	struct platform_device *dev,
 	int devNum,
 	int *portNdx)
 {
+	/* Reset the RIO port id to zero for this device */
 	void __iomem *gpregBase = ioremap(0x2010094000, 0x1000);
-	unsigned long srioCfg = 0;
+	unsigned long reg = 0;
 
 	if (gpregBase == NULL)
 		return -EFAULT;
 
-	srioCfg = inl((long unsigned int)(gpregBase + 0x60));
+	reg = inl((long unsigned int)(gpregBase + 0x60));
 
-	srioCfg &= ~(0xf << (devNum * 4));
+	reg &= ~(0xf << (devNum * 4));
 
-	outl_p(srioCfg, (long unsigned int)(gpregBase + 0x60));
+	outl_p(reg, (long unsigned int)(gpregBase + 0x60));
 
 	(*portNdx) = 0;
 
 	iounmap(gpregBase);
+
+	/* Verify that this device is actually enabled */
+	ncr_read(NCP_REGION_ID(0x115,0), 0x23c, 4, &reg);
+	if ((reg & (1 << (21+(devNum*4)))) == 0) {
+		printk("%s: SRIO%d link not ready\n",
+			dev->dev.of_node->full_name, devNum);
+		return -ENXIO;
+	}
 
 	return 0;
 }
