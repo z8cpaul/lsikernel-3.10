@@ -1723,7 +1723,7 @@ static void rio_fixup_device(struct rio_dev *dev)
 {
 }
 
-static int __devinit rio_init(void)
+static int rio_init(void)
 {
 	struct rio_dev *dev = NULL;
 
@@ -1736,7 +1736,7 @@ static int __devinit rio_init(void)
  * @note No lock; Assuming this is used at boot time only,
  *       before start of user space
  */
-int __devinit rio_init_mports(void)
+int rio_init_mports(void)
 {
 	struct rio_mport *port;
 

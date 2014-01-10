@@ -205,11 +205,6 @@ struct rio_msg_desc {
 	void *cookie;
 };
 
-struct rio_msg_tx_ack {
-	int err_state;
-	void *cookie;
-};
-
 struct rio_msg_dme {
 	spinlock_t lock;
 	char name[16];
@@ -227,7 +222,6 @@ struct rio_msg_dme {
 	int dme_no;
 	struct rio_msg_desc *desc;
 	struct rio_desc *descriptors;
-	struct rio_msg_tx_ack *tx_ack;
 #ifdef CONFIG_SRIO_IRQ_TIME
 	u64 start_irq_tb;
 	u64 start_thrd_tb;
