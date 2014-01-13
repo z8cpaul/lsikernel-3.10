@@ -1013,7 +1013,7 @@ static inline int choose_ob_dme(
 			if (len > sz)
 				continue;
 
-			if (dme->entries >= (dme->entries_in_use+1)) {
+			if (dme->entries > (dme->entries_in_use+1)) {
 				(*ob_dme) = dme;
 				(*buf_sz) = sz;
 				return ret + i;
@@ -1288,7 +1288,7 @@ static int open_outb_mbox(struct rio_mport *mport, void *dev_id, int dme_no,
 	u64 descChainStart, descAddr;
 	int buf_sz = 0;
 
-	if ((entries <= 0) || (entries > priv->desc_max_entries))
+	if ((entries < 2) || (entries > priv->desc_max_entries))
 		return -EINVAL;
 
 	if (test_bit(RIO_IRQ_ENABLED, &h->state))
@@ -1646,7 +1646,7 @@ static int open_inb_mbox(struct rio_mport *mport, void *dev_id,
 	if ((mbox < 0) || (mbox >= RIO_MAX_RX_MBOX))
 		return -EINVAL;
 
-	if ((entries <= 0) || (entries > priv->desc_max_entries))
+	if ((entries < 2) || (entries > priv->desc_max_entries))
 		return -EINVAL;
 
 	h = &priv->ib_dme_irq[mbox];
