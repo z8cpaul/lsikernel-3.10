@@ -240,8 +240,8 @@ int axxia_open_ob_data_stream(
 	int			num_header_entries,
 	int			num_data_entries)
 {
-	struct rio_priv         *priv = mport->priv;
 	int		 	rc = 0;
+	struct rio_priv *priv = mport->priv;
 
 	axxia_api_lock(priv);
 
@@ -379,7 +379,6 @@ int open_ob_data_stream(
 	__rio_local_write_config_32(mport, RAB_OBDSE_DESC_ADDR(dse_id),
 				des_chain_start_addr_phy_low);
 
-
 	h = &(ptr_ds_priv->ob_dse_irq[dse_id]);
 
 	sprintf(ptr_dse_cfg->name, "obds-%d", dse_id);
@@ -462,7 +461,6 @@ int axxia_add_ob_data_stream(
 	int rc = 0;
 
 	/* sanity check - TBD */
-
 	ptr_ds_priv = &(priv->ds_priv_data);
 
 	/*
@@ -704,8 +702,10 @@ void ob_dse_irq_handler(struct rio_irq_handler *h, u32 state)
 				ptr_hdr_desc->dw0);
 
 			/* free the buffer */
-			kfree((void *)ptr_hdr_desc->virt_data_buf);
-			ptr_hdr_desc->buf_status = DS_DBUF_FREED;
+			if (ptr_hdr_desc->buf_status != DS_DBUF_FREED) {
+				kfree((void *)ptr_hdr_desc->virt_data_buf);
+				ptr_hdr_desc->buf_status = DS_DBUF_FREED;
+			}
 
 			if (ptr_dse_cfg->hdr_read_ptr ==
 				(ptr_dse_cfg->max_num_hdr_desc - 1)) {
@@ -736,6 +736,7 @@ void ob_dse_irq_handler(struct rio_irq_handler *h, u32 state)
 					(dse_stat & 0x3F));
 
 	spin_unlock_irqrestore(&ptr_dse_cfg->lock, flags);
+
 	return;
 }
 
@@ -842,8 +843,8 @@ int axxia_open_ib_data_stream(
 	int			desc_dbuf_size,
 	int			num_entries)
 {
-	struct rio_priv *priv = mport->priv;
 	int rc = 0;
+	struct rio_priv *priv = mport->priv;
 
 	axxia_api_lock(priv);
 
@@ -1061,6 +1062,7 @@ int open_ib_data_stream(
 	ptr_virt_m_cfg->cos = cos;
 	ptr_virt_m_cfg->source_id = source_id;
 	ptr_virt_m_cfg->desc_dbuf_size = desc_dbuf_size;
+	ptr_virt_m_cfg->virt_vsid = virt_vsid;
 
 	desc_chain_start_addr_phy =
 		virt_to_phys((void *)
@@ -1136,6 +1138,10 @@ int axxia_add_ibds_buffer(
 	u32		     	m_id;
 	u8		      	found_one = RIO_DS_FALSE;
 	u32			vsid_addr_reg;
+	u32     vsid;
+	u16		virt_vsid;
+	u32     alias_reg;
+	u32		vsid_m_stats;
 
 	unsigned long   data_addr_phy;
 	u32 data_addr_hi;
@@ -1147,11 +1153,20 @@ int axxia_add_ibds_buffer(
 
 	/* search through the virtual M table to find the one that has
 	**  the same source_id and cos */
+	/* find the mapping between incoming VSID and internal VSID */
+	__rio_local_read_config_32(mport, RAB_IBDS_VSID_ALIAS, &alias_reg);
+
+	/* VSID = {16'b SourceID, 8'bCOS} */
+	vsid = ((source_id & 0xFFFF) << 16) | (cos & 0xFF);
+
+	/* calculate the virtual M index */
+	(void)axxio_virt_vsid_convert(vsid, alias_reg, &virt_vsid);
+
+
 	for (m_id = 0; m_id < RIO_MAX_NUM_IBDS_VSID_M; m_id++) {
 		ptr_virt_m_cfg = &(ptr_ds_priv->ibds_vsid_m_cfg[m_id]);
 
-		if ((ptr_virt_m_cfg->source_id == source_id)    &&
-		    (ptr_virt_m_cfg->cos == cos)		&&
+		if ((ptr_virt_m_cfg->virt_vsid == virt_vsid)    &&
 		    (ptr_virt_m_cfg->in_use == RIO_DS_TRUE)) {
 			found_one = RIO_DS_TRUE;
 			break;
@@ -1224,7 +1239,13 @@ int axxia_add_ibds_buffer(
 		vsid_addr_reg |= IB_VSID_M_PREFETCH_ENABLE;
 
 	/* wakeup bit is alway set each time a new buffer is added */
-	vsid_addr_reg |= IB_VSID_M_PREFETCH_WAKEUP;
+	__rio_local_read_config_32(mport,
+				RAB_IBVIRT_M_STAT(m_id),
+				&vsid_m_stats);
+
+	if (vsid_m_stats & IB_VIRT_M_STAT_SLEEPING)
+		vsid_addr_reg |= IB_VSID_M_PREFETCH_WAKEUP;
+
 	__rio_local_write_config_32(mport,
 				RAB_IBDS_VSID_ADDR_HI(m_id),
 				vsid_addr_reg);
@@ -1264,96 +1285,93 @@ void ib_dse_vsid_m_irq_handler(struct rio_irq_handler *h, u32 state)
 	u32 dse_stat, vsid_m_stats;
 	u8  virt_vsid, dse_id;
 	u16 data_write_ptr;
-	u8  found_dse = RIO_DS_FALSE;
 	unsigned long flags;
 	u32	is_desc_done = 1;
 	u8	i;
 
 	for (i = 0; i < 32; i++) {
 		/* if the corresponding interrupt bit is set */
-		if ((state >> i) & 0x1)
-			break;
-	}
+		if ((state >> i) & 0x1) {
+			virt_vsid = i;
 
-	if (i == 32)
-		return;
+			__rio_local_read_config_32(mport,
+					RAB_IBVIRT_M_STAT(virt_vsid),
+					&vsid_m_stats);
 
-	virt_vsid = i;
+			/*
+			** The ARM could also got interrupted with
+			** vsid_m_stats sticky status
+			**	bits not being set. TBD should be 3FF?
+			*/
+			if ((vsid_m_stats & 0x1FF)) {
 
-	__rio_local_read_config_32(mport,
-				RAB_IBVIRT_M_STAT(virt_vsid),
-				&vsid_m_stats);
+				/* check if the chain transfer complete */
+				ptr_virt_m_cfg =
+				&(ptr_ds_priv->ibds_vsid_m_cfg[virt_vsid]);
 
-	/*
-	** The ARM could also got interrupted with vsid_m_stats sticky status
-	**	bits not being set. TBD
-	*/
-	if (!(vsid_m_stats & 0x1FF))
-		return;
+				spin_lock_irqsave(&ptr_virt_m_cfg->lock, flags);
 
-	/* check if the chain transfer complete */
-	ptr_virt_m_cfg = &(ptr_ds_priv->ibds_vsid_m_cfg[virt_vsid]);
+				/* check errors */
+		__ib_virt_m_dbg(&(ptr_ds_priv->ib_vsid_m_stats[virt_vsid]),
+				vsid_m_stats);
 
-	spin_lock_irqsave(&ptr_virt_m_cfg->lock, flags);
 
-	/* disable the interrupt ? - TBD */
+		if (vsid_m_stats & IB_VIRT_M_STAT_FETCH_ERR) {
+			/*
+			** If transaction pending bit is not set an timeout
+			** 	is also not set,
+			** 	that means that PDU was successfully written
+			** 	into AXI memory
+			**      and nothing needs to be done.
+			** If transaction pending bit is set or timeout is set,
+			**	engine needs
+			** 	to be reset. After disabling engine, when
+			**	transaction pending
+			**	gets reset, engine is ready to be enabled again.
+			*/
 
-	/* check errors */
-	__ib_virt_m_dbg(&(ptr_ds_priv->ib_vsid_m_stats[virt_vsid]),
-			vsid_m_stats);
+			/* check if there is a corresponding DSE
+			 ** that handles this vsid */
+			for (dse_id = 0;
+			     dse_id < RIO_MAX_NUM_IBDS_DSE;
+			     dse_id++) {
+				__rio_local_read_config_32(mport,
+						RAB_IBDSE_STAT(dse_id),
+						&dse_stat);
 
-	/* find the engine that handles this VSID */
-	for (dse_id = 0; dse_id < RIO_MAX_NUM_IBDS_DSE; dse_id++) {
-		__rio_local_read_config_32(mport,
-					RAB_IBDSE_STAT(dse_id),
-					&dse_stat);
+			if (((dse_stat & IB_DSE_STAT_TRANS_PENDING)  ||
+			     (dse_stat & IB_DSE_STAT_TIMEOUT))	&&
+			     ((dse_stat & IB_DSE_VSID_IN_USED) == virt_vsid)) {
+				/*
+				** BZ43821 - SW workaround for the IBDS
+				** descriptor fetch error
+				** When S/W sees the descriptor fetch error
+				** being indicated in
+				** status bits, introduce a delay and then
+				** disable the engine
+				**  and enable the engine again.
+				** With this the next incoming packet for that
+				** engine would
+				** not get corrupted.
+				*/
+				ndelay(5);
 
-		if ((dse_stat & IB_DSE_VSID_IN_USED) == virt_vsid) {
-			found_dse = RIO_DS_TRUE;
-			break;
+				/* disable the engine */
+				__rio_local_write_config_32(mport,
+							RAB_IBDSE_CTRL(dse_id),
+							0);
+
+				/*should wait till the pending bit is reset?*/
+
+				/* enable the engine again */
+				__rio_local_write_config_32(mport,
+							RAB_IBDSE_CTRL(dse_id),
+							1);
+
+				break;
+				}
+			}
 		}
-	}
-
-	/* could not find the DSE that processes the VSID */
-	if (found_dse == RIO_DS_FALSE) {
-		spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, flags);
-		return;
-	}
-
-if (vsid_m_stats & IB_VIRT_M_STAT_FETCH_ERR) {
-	/*
-	** If transaction pending bit is not set an timeout is also not set,
-	**	that means that PDU was successfully written into AXI memory
-	**      and nothing needs to be done.
-	** If transaction pending bit is set or timeout is set, engine needs
-	** 	to be reset. After disabling engine, when transaction pending
-	**	gets reset, engine is ready to be enabled again.
-	*/
-	if ((dse_stat & IB_DSE_STAT_TRANS_PENDING)  ||
-		(dse_stat & IB_DSE_STAT_TIMEOUT)) {
-		/*
-		** BZ43821 - SW workaround for the IBDS descriptor fetch error
-		** When S/W sees the descriptor fetch error being indicated in
-		**  status bits, introduce a delay and then disable the engine
-		**  and enable the engine again.
-		** With this the next incoming packet for that engine would
-		**    not get corrupted.
-		*/
-		ndelay(5);
-
-		/* disable the engine */
-		__rio_local_write_config_32(mport,
-					RAB_IBDSE_CTRL(dse_id),
-					0);
-
-		/* should wait till the pending bit is reset? - TBD */
-
-		/* enable the engine again */
-		__rio_local_write_config_32(mport,
-					RAB_IBDSE_CTRL(dse_id),
-					1);
-		}
-	}
 
 
 	/* In case of timeout error, if not alreaday disabled, descriptor
@@ -1375,7 +1393,6 @@ if (vsid_m_stats & IB_VIRT_M_STAT_FETCH_ERR) {
 
 	while (is_desc_done) {
 		ptr_virt_m_cfg->num_hw_written_bufs++;
-
 		__ib_dse_dw_dbg(
 				&(ptr_ds_priv->ib_vsid_m_stats[virt_vsid]),
 				ptr_data_desc->dw0);
@@ -1411,6 +1428,10 @@ if (vsid_m_stats & IB_VIRT_M_STAT_FETCH_ERR) {
 				&vsid_m_stats);
 
     spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, flags);
+		}
+
+		}
+	}
 
     return;
 }
@@ -1446,14 +1467,27 @@ void *axxia_get_ibds_data(
 	void		    *user_buf;
 	u32		pdu_length;
 	unsigned long iflags;
+	u32     vsid;
+	u16		virt_vsid;
+	u32     alias_reg;
+
+
+	/* find the mapping between incoming VSID and internal VSID */
+	__rio_local_read_config_32(mport, RAB_IBDS_VSID_ALIAS, &alias_reg);
+
+	/* VSID = {16'b SourceID, 8'bCOS} */
+	vsid = ((source_id & 0xFFFF) << 16) | (cos & 0xFF);
+
+	/* calculate the virtual M index */
+	(void)axxio_virt_vsid_convert(vsid, alias_reg, &virt_vsid);
+
 
 	/* search through the virtual M table to find the one that
 	** has the same source_id and cos */
 	for (m_id = 0; m_id < RIO_MAX_NUM_IBDS_VSID_M; m_id++) {
 		ptr_virt_m_cfg = &(ptr_ds_priv->ibds_vsid_m_cfg[m_id]);
 
-		if ((ptr_virt_m_cfg->source_id == source_id)    &&
-		    (ptr_virt_m_cfg->cos == cos)		&&
+		if ((ptr_virt_m_cfg->virt_vsid == virt_vsid)    &&
 		    (ptr_virt_m_cfg->in_use == RIO_DS_TRUE)) {
 			found_one = RIO_DS_TRUE;
 			break;
@@ -1466,7 +1500,6 @@ void *axxia_get_ibds_data(
 	/* check if the there are buffers that are written - semaphore ?*/
 	if (ptr_virt_m_cfg->num_hw_written_bufs < 1)
 		return NULL;
-
 
 	spin_lock_irqsave(&ptr_virt_m_cfg->lock, iflags);
 
@@ -1515,6 +1548,7 @@ void *axxia_get_ibds_data(
 
 		return user_buf;
 	}
+
 }
 EXPORT_SYMBOL(axxia_get_ibds_data);
 
@@ -1763,7 +1797,7 @@ int axxia_cfg_ds(
 	ptr_ds_priv->num_ibds_virtual_m = RIO_MAX_NUM_IBDS_VSID_M;
 	ptr_ds_priv->num_ibds_dses = RIO_MAX_NUM_IBDS_DSE;
 
-	/* Enable all DSEs */
+	/* Enable all VIRTM */
 	for (dse_id = 0; dse_id < ptr_ds_priv->num_ibds_dses; dse_id++) {
 		__rio_local_write_config_32(mport,
 					RAB_IBDSE_CTRL(dse_id),
