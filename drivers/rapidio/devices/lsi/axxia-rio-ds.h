@@ -73,9 +73,9 @@
 #define IB_VSID_M_PREFETCH_ENABLE		(2)
 #define IB_VSID_M_PREFETCH_WAKEUP		(4)
 
-#define RAB_OBDSE_CTRL(n)            (RAB_REG_BASE + (0x2d28 + (0x10*(n))))
-#define RAB_OBDSE_STAT(n)            (RAB_REG_BASE + (0x2d28 + (0x10*(n)))+0x4)
-#define RAB_OBDSE_DESC_ADDR(n)       (RAB_REG_BASE + (0x2d28 + (0x10*(n)))+0x8)
+#define RAB_OBDSE_CTRL(n)            (RAB_REG_BASE + (0x2d28 + (0xC*(n))))
+#define RAB_OBDSE_STAT(n)            (RAB_REG_BASE + (0x2d28 + (0xC*(n)))+0x4)
+#define RAB_OBDSE_DESC_ADDR(n)       (RAB_REG_BASE + (0x2d28 + (0xC*(n)))+0x8)
 
 #define RAB_IBVIRT_M_STAT(n)         (RAB_REG_BASE + (0x2ef0 + (0x4*(n))))
 
@@ -95,6 +95,8 @@
 
 /* stats */
 #define IB_VIRT_M_STAT_ERROR_MASK           0x3FC
+#define IB_VIRT_M_STAT_SLEEPING			(1<<11)
+#define IB_VIRT_M_STAT_TRAN_PENDING		(1<<10)
 #define IB_VIRT_M_STAT_PDU_DROPPED	    (1 << 9)
 #define IB_VIRT_M_STAT_SEG_LOSS		    (1 << 8)
 #define IB_VIRT_M_STAT_MTU_LEN_MIS_ERR	    (1 << 7)
@@ -242,6 +244,8 @@ struct ibds_virt_m_cfg {
 	u32			num_hw_written_bufs;
 
 	u32			alias_reg_value;
+	u16			virt_vsid;
+	u16			num_data_streams;
 
 };
 
@@ -292,7 +296,7 @@ struct rio_ds_priv {
 	struct rio_irq_handler  ob_dse_irq[RIO_MAX_NUM_OBDS_DSE];
 	struct rio_irq_handler  ib_dse_vsid_irq[RIO_MAX_NUM_IBDS_VSID_M];
 
-	struct rio_ds_ibds_vsid_m_stats ib_vsid_m_stats[RIO_MAX_NUM_IBDS_VSID_M];
+struct rio_ds_ibds_vsid_m_stats ib_vsid_m_stats[RIO_MAX_NUM_IBDS_VSID_M];
 	struct rio_ds_obds_dse_stats        ob_dse_stats[RIO_MAX_NUM_OBDS_DSE];
 
 	u8		is_use_ds_feature;
