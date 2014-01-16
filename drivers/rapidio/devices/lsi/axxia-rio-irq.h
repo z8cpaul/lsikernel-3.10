@@ -216,7 +216,7 @@ struct rio_msg_dme {
 	int entries_in_use;
 	int write_idx;
 	int read_idx;
-	int pending;
+	atomic_t pending;
 	int tx_dme_tmo;
 	void *dev_id;
 	int dme_no;

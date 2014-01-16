@@ -460,7 +460,7 @@
 
         rio0: rapidio@0x3100000000 {
                 index = <0>;
-                status = "disabled";
+                status = "okay";
                 #address-cells = <2>;
                 #size-cells = <2>;
                 compatible = "axxia,rapidio-delta";
@@ -475,7 +475,7 @@
 
         rio1: rapidio@0x3140000000 {
                 index = <1>;
-                status = "disabled";
+                status = "okay";
                 #address-cells = <2>;
                 #size-cells = <2>;
                 compatible = "axxia,rapidio-delta";
