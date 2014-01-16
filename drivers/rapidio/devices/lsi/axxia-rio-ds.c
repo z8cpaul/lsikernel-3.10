@@ -1839,6 +1839,7 @@ void axxia_rio_ds_port_irq_init(
 		ptr_ds_priv->ob_dse_irq[i].irq_state_reg_addr =
 				RAB_INTR_STAT_ODSE;
 		ptr_ds_priv->ob_dse_irq[i].irq_state_mask = (1 << i);
+		ptr_ds_priv->ob_dse_irq[i].irq_state = 0;
 		ptr_ds_priv->ob_dse_irq[i].thrd_irq_fn = ob_dse_irq_handler;
 		ptr_ds_priv->ob_dse_irq[i].data = NULL;
 		ptr_ds_priv->ob_dse_irq[i].release_fn = release_ob_ds;
@@ -1858,6 +1859,7 @@ void axxia_rio_ds_port_irq_init(
 		ptr_ds_priv->ib_dse_vsid_irq[i].irq_state_reg_addr =
 				RAB_INTR_STAT_IBSE_VSID_M;
 		ptr_ds_priv->ib_dse_vsid_irq[i].irq_state_mask = (1 << i);
+		ptr_ds_priv->ib_dse_vsid_irq[i].irq_state = 0;
 		ptr_ds_priv->ib_dse_vsid_irq[i].thrd_irq_fn =
 				ib_dse_vsid_m_irq_handler;
 		ptr_ds_priv->ib_dse_vsid_irq[i].data = NULL;

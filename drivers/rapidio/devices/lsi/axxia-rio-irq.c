@@ -348,18 +348,8 @@ static void reset_state_counters(struct rio_priv *priv)
 static irqreturn_t thrd_irq_handler(int irq, void *data)
 {
 	struct rio_irq_handler *h = data;
-	struct rio_mport *mport = h->mport;
-	u32 state;
 
 	atomic_inc(&thrd_handler_calls);
-
-	/**
-	 * Get current interrupt state and clear latched state
-	 * for interrupts handled by current thread.
-	 */
-	__rio_local_read_config_32(mport, h->irq_state_reg_addr, &state);
-	state &= h->irq_state_mask;
-	__rio_local_write_config_32(mport, h->irq_state_reg_addr, state);
 
 #ifdef CONFIG_SRIO_IRQ_TIME
 	if (atomic_read(&h->start_time))
@@ -370,7 +360,7 @@ static irqreturn_t thrd_irq_handler(int irq, void *data)
 	 * Invoke handler callback
 	 */
 	test_and_set_bit(RIO_IRQ_ACTIVE, &h->state);
-	h->thrd_irq_fn(h, state);
+	h->thrd_irq_fn(h, h->irq_state);
 	clear_bit(RIO_IRQ_ACTIVE, &h->state);
 
 	return IRQ_HANDLED;
@@ -386,18 +376,25 @@ static irqreturn_t hw_irq_handler(int irq, void *data)
 {
 	struct rio_irq_handler *h = data;
 	struct rio_mport *mport = h->mport;
-	u32 state;
 
 	atomic_inc(&hw_handler_calls);
 
-	__rio_local_read_config_32(mport, h->irq_state_reg_addr, &state);
-	if (state & h->irq_state_mask) {
+	/**
+	 * Get current interrupt state and clear latched state
+	 * for interrupts handled by current thread.
+	 */
+	__rio_local_read_config_32(mport, h->irq_state_reg_addr, &h->irq_state);
+	h->irq_state &= h->irq_state_mask;
+	__rio_local_write_config_32(mport, h->irq_state_reg_addr, h->irq_state);
+
+	if (h->irq_state & h->irq_state_mask) {
 #ifdef CONFIG_SRIO_IRQ_TIME
 		if (atomic_read(&h->start_time))
 			h->irq_tb = get_tb();
 #endif
 		return IRQ_WAKE_THREAD;
 	}
+
 	return IRQ_NONE;
 }
 
@@ -1013,7 +1010,7 @@ static inline int choose_ob_dme(
 			if (len > sz)
 				continue;
 
-			if (dme->entries > (dme->entries_in_use+1)) {
+			if (dme->entries >= (dme->entries_in_use+1)) {
 				(*ob_dme) = dme;
 				(*buf_sz) = sz;
 				return ret + i;
@@ -1197,10 +1194,10 @@ static void ob_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 	struct rio_mport *mport = h->mport;
 	struct rio_priv *priv = mport->priv;
 	struct rio_msg_dme *mbox = h->data;
-	int i;
 	u32 dme_stat, dw0, dme_no = 31 - CNTLZW(state);
 	u32 dme_ctrl;
 	unsigned long flags;
+	int i;
 
 	/**
 	 * Clear latched state
@@ -1251,7 +1248,6 @@ static void ob_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 			if (mport->outb_msg[dme_no].mcback) {
 				__ob_dme_event_dbg(priv, dme_no,
 				   		1 << RIO_OB_DME_TX_DESC_READY);
-
 				mport->outb_msg[dme_no].mcback(mport,
 					       		mbox->dev_id,
 					       		dme_no,
@@ -1531,7 +1527,8 @@ static void ib_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 					 DESC_TABLE_W0(desc->desc_no), &dw0);
 			}
 
-			if (dw0 & DME_DESC_DW0_READY_MASK) {
+			if ((dw0 & DME_DESC_DW0_READY_MASK) &&
+			    (dw0 & DME_DESC_DW0_VALID)) {
 
 				/* Some chips clear this bit, some don't.
 				** Make sure in any event. */
@@ -2301,6 +2298,7 @@ int axxia_add_inb_buffer(struct rio_mport *mport, int mbox, void *buf)
 {
 	struct rio_priv *priv = mport->priv;
 	struct rio_rx_mbox *mb;
+	unsigned long iflags;
 	int rc = 0;
 
 	if ((mbox < 0) || (mbox >= RIO_MAX_RX_MBOX))
@@ -2309,12 +2307,15 @@ int axxia_add_inb_buffer(struct rio_mport *mport, int mbox, void *buf)
 	mb = mbox_get(priv->ib_dme_irq[mbox].data);
 	if (!mb)
 		return -EINVAL;
+
+	spin_lock_irqsave(&mb->lock, iflags);
 	if (mb->virt_buffer[mb->last_rx_slot])
 		goto busy;
 
 	mb->virt_buffer[mb->last_rx_slot] = buf;
 	mb->last_rx_slot = (mb->last_rx_slot + 1) % mb->ring_size;
 done:
+	spin_unlock_irqrestore(&mb->lock, iflags);
 	mbox_put(mb);
 	return rc;
 busy:
@@ -2339,6 +2340,7 @@ void *axxia_get_inb_message(struct rio_mport *mport, int mbox, int letter,
 	struct rio_priv *priv = mport->priv;
 	struct rio_rx_mbox *mb;
 	struct rio_msg_dme *me;
+	unsigned long iflags;
 	void *buf = NULL;
 
 	if ((mbox < 0) || (mbox >= RIO_MAX_RX_MBOX))
@@ -2354,6 +2356,7 @@ void *axxia_get_inb_message(struct rio_mport *mport, int mbox, int letter,
 	if (!me)
 		return ERR_PTR(-EINVAL);
 
+	spin_lock_irqsave(&mb->lock, iflags);
 	if (!in_interrupt() &&
 	    !test_bit(RIO_IRQ_ACTIVE, &priv->ib_dme_irq[mbox].state)) {
 		u32	intr;
@@ -2445,6 +2448,7 @@ void *axxia_get_inb_message(struct rio_mport *mport, int mbox, int letter,
 		}
 	}
 done:
+	spin_unlock_irqrestore(&mb->lock, iflags);
 	dme_put(me);
 	mbox_put(mb);
 	return buf;
@@ -2472,6 +2476,7 @@ void axxia_rio_port_irq_init(struct rio_mport *mport)
 		GRIO_INT | LL_TL_INT | UNEXP_MSG_LOG |
 		UNSP_RIO_REQ_INT | UNEXP_MSG_INT;
 #endif
+	priv->misc_irq.irq_state = 0;
 	priv->misc_irq.thrd_irq_fn = misc_irq_handler;
 	priv->misc_irq.data = NULL;
 	priv->misc_irq.release_fn = NULL;
@@ -2484,6 +2489,7 @@ void axxia_rio_port_irq_init(struct rio_mport *mport)
 	priv->linkdown_irq.irq_enab_reg_addr = 0;
 	priv->linkdown_irq.irq_state_reg_addr = RAB_SRDS_STAT1;
 	priv->linkdown_irq.irq_state_mask = RAB_SRDS_STAT1_LINKDOWN_INT;
+	priv->linkdown_irq.irq_state = 0;
 	priv->linkdown_irq.thrd_irq_fn = linkdown_irq_handler;
 	priv->linkdown_irq.data = NULL;
 	priv->linkdown_irq.release_fn = NULL;
@@ -2496,6 +2502,7 @@ void axxia_rio_port_irq_init(struct rio_mport *mport)
 	priv->pw_irq.irq_enab_reg_addr = RAB_INTR_ENAB_MISC;
 	priv->pw_irq.irq_state_reg_addr = RAB_INTR_STAT_MISC;
 	priv->pw_irq.irq_state_mask = PORT_WRITE_INT;
+	priv->pw_irq.irq_state = 0;
 	priv->pw_irq.thrd_irq_fn = pw_irq_handler;
 	priv->pw_irq.data = NULL;
 	priv->pw_irq.release_fn = disable_pw;
@@ -2511,6 +2518,7 @@ void axxia_rio_port_irq_init(struct rio_mport *mport)
 #if defined(CONFIG_AXXIA_RIO_STAT)
 	priv->db_irq.irq_state_mask |= OB_DB_DONE_INT;
 #endif
+	priv->db_irq.irq_state = 0;
 	priv->db_irq.thrd_irq_fn = db_irq_handler;
 	priv->db_irq.data = NULL;
 	priv->db_irq.release_fn = NULL;
@@ -2524,6 +2532,7 @@ void axxia_rio_port_irq_init(struct rio_mport *mport)
 		priv->ob_dme_irq[i].irq_enab_reg_addr = RAB_INTR_ENAB_ODME;
 		priv->ob_dme_irq[i].irq_state_reg_addr = RAB_INTR_STAT_ODME;
 		priv->ob_dme_irq[i].irq_state_mask = (1 << i);
+		priv->ob_dme_irq[i].irq_state = 0;
 		priv->ob_dme_irq[i].thrd_irq_fn = ob_dme_irq_handler;
 		priv->ob_dme_irq[i].data = NULL;
 		priv->ob_dme_irq[i].release_fn = release_outb_mbox;
@@ -2538,6 +2547,7 @@ void axxia_rio_port_irq_init(struct rio_mport *mport)
 		priv->ib_dme_irq[i].irq_enab_reg_addr = RAB_INTR_ENAB_IDME;
 		priv->ib_dme_irq[i].irq_state_reg_addr = RAB_INTR_STAT_IDME;
 		priv->ib_dme_irq[i].irq_state_mask = 0; /*(0xf << (i * 4));*/
+		priv->ib_dme_irq[i].irq_state = 0;
 		priv->ib_dme_irq[i].thrd_irq_fn = ib_dme_irq_handler;
 		priv->ib_dme_irq[i].data = NULL;
 		priv->ib_dme_irq[i].release_fn = release_inb_mbox;
@@ -2556,6 +2566,7 @@ void axxia_rio_port_irq_init(struct rio_mport *mport)
 #else
 	priv->apio_irq.irq_state_mask = 0;
 #endif
+	priv->apio_irq.irq_state = 0;
 	priv->apio_irq.thrd_irq_fn = apio_irq_handler;
 	priv->apio_irq.data = NULL;
 	priv->apio_irq.release_fn = NULL;
@@ -2569,6 +2580,7 @@ void axxia_rio_port_irq_init(struct rio_mport *mport)
 #else
 	priv->rpio_irq.irq_state_mask = 0;
 #endif
+	priv->rpio_irq.irq_state = 0;
 	priv->rpio_irq.thrd_irq_fn = rpio_irq_handler;
 	priv->rpio_irq.data = NULL;
 	priv->rpio_irq.release_fn = NULL;

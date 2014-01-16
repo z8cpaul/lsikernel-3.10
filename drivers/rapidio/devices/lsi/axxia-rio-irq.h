@@ -235,6 +235,7 @@ struct rio_msg_dme {
 };
 
 struct rio_rx_mbox {
+	spinlock_t lock;
 	int mbox_no;
 	char name[16];
 	struct kref kref;
@@ -266,6 +267,7 @@ struct rio_irq_handler {
 	u32 irq_enab_reg_addr;
 	u32 irq_state_reg_addr;
 	u32 irq_state_mask;
+	u32 irq_state;
 	void (*thrd_irq_fn)(struct rio_irq_handler *h, u32 state);
 	void (*release_fn)(struct rio_irq_handler *h);
 	void *data;
