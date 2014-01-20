@@ -78,6 +78,10 @@
 	status = "okay";
 };
 
+&spics {
+	status = "okay";
+};
+
 &spi0 {
 	status = "okay";
 
