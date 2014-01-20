@@ -370,6 +370,12 @@
 				#size-cells = <0>;
 				reg = <0x20 0x10088000 0x00 0x1000>;
 				interrupts = <0 42 4>;
+				num-cs = <5>;
+				cs-gpios = <&spics 0 1>,
+					   <&spics 1 1>,
+					   <&spics 2 1>,
+					   <&spics 3 1>,
+					   <&spics 4 1>;
 				status = "disabled";
 			};
 		};
