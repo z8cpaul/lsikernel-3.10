@@ -1,5 +1,5 @@
 /*
- * arch/arm/boot/dts/axm55xxemu.dts
+ * arch/arm/boot/dts/axm55xxemu7.dts
  *
  * Copyright (C) 2012 LSI
  *
@@ -69,6 +69,30 @@
 			device_type = "cpu";
 			compatible = "arm,cortex-a15";
 			reg = <3>;
+                        cpu-release-addr = <0>; // Fixed by the boot loader
+			clock-frequency= <0>;   // Placeholder
+		};
+
+		cpu@4 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a15";
+			reg = <4>;
+                        cpu-release-addr = <0>; // Fixed by the boot loader
+			clock-frequency= <0>;   // Placeholder
+		};
+
+		cpu@5 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a15";
+			reg = <5>;
+                        cpu-release-addr = <0>; // Fixed by the boot loader
+			clock-frequency= <0>;   // Placeholder
+		};
+
+		cpu@6 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a15";
+			reg = <6>;
                         cpu-release-addr = <0>; // Fixed by the boot loader
 			clock-frequency= <0>;   // Placeholder
 		};
