@@ -58,6 +58,7 @@
 static const char *axxia_dt_match[] __initconst = {
 	"lsi,axm5516",
 	"lsi,axm5516-sim",
+	"lsi,axm5516-emu",
 	NULL
 };
 
@@ -296,6 +297,7 @@ void __init axxia_dt_init(void)
 	pm_power_off = NULL; /* TBD */
 
 	ncr_init();
+	axxia_ddr_retention_init();
 
 	spi_register_board_info(spi_devs, ARRAY_SIZE(spi_devs));
 
@@ -306,8 +308,6 @@ void __init axxia_dt_init(void)
 			    0);
 
 	axxia_pcie_init();
-
-	axxia_ddr_retention_init();
 
 	platform_device_register(&pmu_device);
 }
