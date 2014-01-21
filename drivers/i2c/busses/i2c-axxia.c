@@ -116,12 +116,8 @@ struct axxia_i2c_dev {
 	struct i2c_adapter adapter;
 	/* clock reference for i2c input clock */
 	struct clk *i2c_clk;
-	/* ioremapped registers cookie */
-	void __iomem *base;
 	/* pointer to register struct */
 	struct i2c_regs __iomem *regs;
-	/* irq number */
-	int irq;
 	/* xfer completion object */
 	struct completion msg_complete;
 	/* pointer to current message */
@@ -488,11 +484,11 @@ axxia_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 static u32
 axxia_i2c_func(struct i2c_adapter *adap)
 {
-	return I2C_FUNC_I2C |
+	u32 caps = (I2C_FUNC_I2C |
 		I2C_FUNC_10BIT_ADDR |
 		I2C_FUNC_SMBUS_EMUL |
-		I2C_FUNC_SMBUS_BLOCK_DATA;
-
+		I2C_FUNC_SMBUS_BLOCK_DATA);
+	return caps;
 }
 
 static const struct i2c_algorithm axxia_i2c_algo = {
@@ -505,49 +501,42 @@ axxia_i2c_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct axxia_i2c_dev *idev = NULL;
-	struct clk *i2c_clk = NULL;
-	void __iomem *base = NULL;
-	u32 bus = pdev->id;
-	int irq = 0;
+	struct resource *res;
+	void __iomem *base;
+	int irq;
 	int ret = 0;
 
-	base = of_iomap(np, 0);
-	if (!base) {
-		dev_err(&pdev->dev, "failed to iomap registers\n");
-		ret = -ENOMEM;
-		goto err_cleanup;
+	idev = devm_kzalloc(&pdev->dev, sizeof(*idev), GFP_KERNEL);
+	if (!idev)
+		return -ENOMEM;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res) {
+		dev_err(&pdev->dev, "can't get device io-resource\n");
+		return -ENOENT;
 	}
 
-	irq = irq_of_parse_and_map(np, 0);
-	if (irq == 0) {
-		dev_err(&pdev->dev, "no irq property\n");
-		ret = -EINVAL;
-		goto err_cleanup;
+	irq = platform_get_irq(pdev, 0);
+	if (irq < 0) {
+		dev_err(&pdev->dev, "can't get irq number\n");
+		return -ENOENT;
 	}
 
-	i2c_clk = clk_get(&pdev->dev, "i2c");
-	if (IS_ERR(i2c_clk)) {
-		dev_err(&pdev->dev, "missing bus clock");
-		ret = PTR_ERR(i2c_clk);
-		goto err_cleanup;
+	base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(base))
+		return PTR_ERR(base);
+
+	idev->i2c_clk = devm_clk_get(&pdev->dev, "i2c");
+	if (IS_ERR(idev->i2c_clk)) {
+		dev_err(&pdev->dev, "missing I2C bus clock");
+		return PTR_ERR(idev->i2c_clk);
 	}
 
-	idev = kzalloc(sizeof(struct axxia_i2c_dev), GFP_KERNEL);
-	if (!idev) {
-		ret = -ENOMEM;
-		goto err_cleanup;
-	}
-
-	idev->base         = base;
-	idev->regs         = (struct __iomem i2c_regs*) base;
-	idev->i2c_clk      = i2c_clk;
+	idev->regs         = (struct i2c_regs __iomem *) base;
 	idev->dev          = &pdev->dev;
 	init_completion(&idev->msg_complete);
 
-	of_property_read_u32(np, "bus", &bus);
-
 	of_property_read_u32(np, "clock-frequency", &idev->bus_clk_rate);
-
 	if (idev->bus_clk_rate == 0)
 		idev->bus_clk_rate = 100000; /* default clock rate */
 
@@ -556,48 +545,37 @@ axxia_i2c_probe(struct platform_device *pdev)
 	ret = axxia_i2c_init(idev);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to initialize i2c controller");
-		goto err_cleanup;
+		return ret;
 	}
 
-	ret = request_irq(irq, axxia_i2c_isr, 0, pdev->name, idev);
+	ret = devm_request_irq(&pdev->dev, irq, axxia_i2c_isr, 0,
+			pdev->name, idev);
 	if (ret) {
-		dev_err(&pdev->dev, "Failed to request irq %i\n", idev->irq);
-		goto err_cleanup;
+		dev_err(&pdev->dev, "can't claim irq %d\n", irq);
+		return ret;
 	}
-	idev->irq = irq;
 
 	clk_enable(idev->i2c_clk);
 
 	i2c_set_adapdata(&idev->adapter, idev);
+	strlcpy(idev->adapter.name, pdev->name, sizeof(idev->adapter.name));
 	idev->adapter.owner = THIS_MODULE;
 	idev->adapter.class = I2C_CLASS_HWMON;
-	snprintf(idev->adapter.name, sizeof(idev->adapter.name),
-		 "Axxia I2C%u", bus);
 	idev->adapter.algo = &axxia_i2c_algo;
 	idev->adapter.dev.parent = &pdev->dev;
-	idev->adapter.nr = bus;
 	idev->adapter.dev.of_node = pdev->dev.of_node;
 
-	ret = i2c_add_numbered_adapter(&idev->adapter);
+	ret = i2c_add_adapter(&idev->adapter);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to add I2C adapter\n");
-		goto err_cleanup;
+		return ret;
 	}
+
+	platform_set_drvdata(pdev, idev);
 
 	of_i2c_register_devices(&idev->adapter);
 
 	return 0;
-
-err_cleanup:
-	if (!IS_ERR_OR_NULL(i2c_clk))
-		clk_put(i2c_clk);
-	if (base)
-		iounmap(base);
-	if (idev && idev->irq)
-		free_irq(irq, idev);
-	kfree(idev);
-
-	return ret;
 }
 
 static int
@@ -605,10 +583,6 @@ axxia_i2c_remove(struct platform_device *pdev)
 {
 	struct axxia_i2c_dev *idev = platform_get_drvdata(pdev);
 	i2c_del_adapter(&idev->adapter);
-	free_irq(idev->irq, idev);
-	clk_put(idev->i2c_clk);
-	iounmap(idev->base);
-	kfree(idev);
 	return 0;
 }
 
