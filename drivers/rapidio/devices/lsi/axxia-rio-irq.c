@@ -1010,7 +1010,7 @@ static inline int choose_ob_dme(
 			if (len > sz)
 				continue;
 
-			if (dme->entries >= (dme->entries_in_use+1)) {
+			if (dme->entries > (dme->entries_in_use+1)) {
 				(*ob_dme) = dme;
 				(*buf_sz) = sz;
 				return ret + i;
@@ -1472,7 +1472,6 @@ static void ib_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 		u32 dw0;
 		int dme_no = 31 - CNTLZW(dme_mask);
 		int num_new;
-		int nPending;
 		dme_mask ^= (1 << dme_no);
 
 		while (mb->me[letter]->dme_no != dme_no)
@@ -1512,7 +1511,7 @@ static void ib_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 #endif
 		/**
 		 * Set Valid flag to 0 on each desc with a new message.
-		 * Flag is reset when the message beloning to the desc
+		 * Flag is reset when the message belonging to the desc
 		 * is fetched in get_inb_message().
 		 * HW descriptor update and fetch is in order.
 		 */
@@ -1543,6 +1542,12 @@ static void ib_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 						dw0 & ~DME_DESC_DW0_VALID);
 				}
 
+				if (mport->inb_msg[mbox_no].mcback)
+					mport->inb_msg[mbox_no].mcback(mport,
+						       		me->dev_id,
+						       		mbox_no,
+						       		desc->desc_no);
+
 				__ib_dme_dw_dbg(priv, dw0);
 				__ib_dme_event_dbg(priv, dme_no,
 						   1 << RIO_IB_DME_RX_PUSH);
@@ -1562,16 +1567,6 @@ static void ib_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 		if (num_new == me->entries)
 			__ib_dme_event_dbg(priv, dme_no,
 					   1 << RIO_IB_DME_RX_RING_FULL);
-
-		nPending = atomic_read(&me->pending);
-		if (nPending &&
-		    mport->inb_msg[mbox_no].mcback)
-		{
-			mport->inb_msg[mbox_no].mcback(mport,
-						       me->dev_id,
-						       mbox_no,
-						       letter);
-		}
 
 		if (dme_stat & IB_DME_STAT_SLEEPING) {
 			struct rio_msg_desc *desc;
@@ -2125,8 +2120,7 @@ static struct rio_msg_desc *get_ob_desc(struct rio_mport *mport,
 					   DESC_TABLE_W0(desc->desc_no),
 					   &dw0);
 		}
-		if (!(dw0 & DME_DESC_DW0_VALID) ||
-		    (dw0 & DME_DESC_DW0_ERROR_MASK)) {
+		if (!(dw0 & DME_DESC_DW0_VALID)) {
 			if (desc_num != mb->write_idx)
 				return NULL;
 			if (desc_num == mb->write_idx)
