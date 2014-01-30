@@ -763,7 +763,7 @@ void axxia_rio_set_mport_disc_mode(struct rio_mport *mport)
 
 #ifdef SRIO_IODEBUG
 	__rio_local_read_config_32(mport, RIO_GCCSR, &result);
-	dev_dbg(priv->dev, "%d RIO_GEN_CTL_CSR set to 0x%X for main port\n",
+	IODP("rio[%d]: RIO_GEN_CTL_CSR set to 0x%X for main port\n",
 		mport->id, result);
 #endif
 

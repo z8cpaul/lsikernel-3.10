@@ -141,7 +141,7 @@ static inline void __misc_info_dbg(struct rio_priv *priv, u32 misc_state)
 	/* Log only - no enable bit or state to clear */
 	if (misc_state & (UNEXP_MSG_LOG | UNEXP_MSG_INT |
 			  LL_TL_INT | GRIO_INT |
-			  UNSP_RIO_REQ_INT)) {
+			  UNSP_RIO_REQ_INT | LINK_REQ_INT)) {
 		if (misc_state & UNEXP_MSG_INT)
 			__irq_dbg(priv, RIO_MISC_UNEXP);
 		if (misc_state & LL_TL_INT)
@@ -150,6 +150,8 @@ static inline void __misc_info_dbg(struct rio_priv *priv, u32 misc_state)
 			__irq_dbg(priv, RIO_MISC_GRIO);
 		if (misc_state & UNSP_RIO_REQ_INT)
 			__irq_dbg(priv, RIO_MISC_UNSUP);
+		if (misc_state & LINK_REQ_INT)
+			__irq_dbg(priv, RIO_MISC_LINK_REQ);
 	}
 }
 
@@ -533,6 +535,42 @@ static inline void __misc_fatal(struct rio_mport *mport,
 }
 
 /**
+ * srio_sw_reset - Reset the SRIO (GRIO) module when it reaches a fatal
+ *                 lockup state
+ * @mport: Master port with triggered interrupt
+ */
+static void srio_sw_reset(struct rio_mport *mport)
+{
+	struct rio_priv *priv = mport->priv;
+
+	/**
+	 * Reset platform if port is broken
+	 */
+	if (priv->linkdown_reset.win) {
+		u32 r0, r00, r1, r2;
+
+		__rio_local_read_config_32(mport, RIO_DID_CSR, &r1);
+		__rio_local_read_config_32(mport, RIO_COMPONENT_TAG_CSR, &r2);
+
+		r0 = *((u32 *)priv->linkdown_reset.win+
+				priv->linkdown_reset.reg_addr);
+		*((u32 *)priv->linkdown_reset.win+
+		 	priv->linkdown_reset.reg_addr) =
+	    			r0 | priv->linkdown_reset.reg_mask;
+
+		r00 = *((u32 *)priv->linkdown_reset.win+
+				priv->linkdown_reset.reg_addr);
+			/* Verify that the bit was set? */
+
+		*((u32 *)priv->linkdown_reset.win+
+		 	priv->linkdown_reset.reg_addr) = r0;
+
+		__rio_local_write_config_32(mport, RIO_DID_CSR, r1);
+		__rio_local_write_config_32(mport, RIO_COMPONENT_TAG_CSR, r2);
+	}
+}
+
+/**
  * misc_irq_handler - MISC interrupt handler
  * @h: handler specific data
  * @state: Interrupt state
@@ -544,8 +582,14 @@ static void misc_irq_handler(struct rio_irq_handler *h, u32 state)
 	struct rio_priv *priv = mport->priv;
 #endif
 
+	/*
+	 * Handle miscellaneous 'Link (IPG) Reset Request'
+	 */
+	if (state & LINK_REQ_INT)
+		srio_sw_reset(mport);
+
 	/**
-	 * notify platform if port is broken
+	 * Notify platform if port is broken
 	 */
 	__misc_fatal(mport, state);
 
@@ -572,17 +616,8 @@ static void linkdown_irq_handler(struct rio_irq_handler *h, u32 state)
 	/**
 	 * Reset platform if port is broken
 	 */
-	if (state & RAB_SRDS_STAT1_LINKDOWN_INT) {
-		u32 r32;
-		r32 = *((u32 *)priv->linkdown_reset.win+
-				priv->linkdown_reset.reg_addr);
-		r32 |= priv->linkdown_reset.reg_mask;
-		*((u32 *)priv->linkdown_reset.win+
-			 priv->linkdown_reset.reg_addr) =
-		    r32 | priv->linkdown_reset.reg_mask;
-		*((u32 *)priv->linkdown_reset.win+
-			 priv->linkdown_reset.reg_addr) = r32;
-	}
+	if (state & RAB_SRDS_STAT1_LINKDOWN_INT)
+		srio_sw_reset(mport);
 
 #if defined(CONFIG_AXXIA_RIO_STAT)
 	/**
@@ -2522,7 +2557,8 @@ void axxia_rio_port_irq_init(struct rio_mport *mport)
 	priv->misc_irq.mport = mport;
 	priv->misc_irq.irq_enab_reg_addr = RAB_INTR_ENAB_MISC;
 	priv->misc_irq.irq_state_reg_addr = RAB_INTR_STAT_MISC;
-	priv->misc_irq.irq_state_mask = AMST_INT | ASLV_INT;
+	priv->misc_irq.irq_state_mask = AMST_INT | ASLV_INT |
+					LINK_REQ_INT;
 #if defined(CONFIG_AXXIA_RIO_STAT)
 	priv->misc_irq.irq_state_mask |=
 		GRIO_INT | LL_TL_INT | UNEXP_MSG_LOG |

@@ -53,16 +53,17 @@ static const char *state_str[] = {
 
 static const char *irq_str[] = {
 	/* Axxia Error Events - really bad! */
-	"Axxia Master Write timouts                            ",
-	"Axxia Master Read timouts                             ",
-	"Axxia Slave write decode error response               ",
-	"Axxia Slave write error response                      ",
-	"Axxia Slave read decode error response                ",
-	"Axxia Slave read error response                       ",
-	"Axxia Slave unsupported cmds                          ",
+	"Axxia Master Write timouts                           ",
+	"Axxia Master Read timouts                            ",
+	"Axxia Slave write decode error response              ",
+	"Axxia Slave write error response                     ",
+	"Axxia Slave read decode error response               ",
+	"Axxia Slave read error response                      ",
+	"Axxia Slave unsupported cmds                         ",
 	"Logical/Transport layer errors                       ",
 	"General RapidIO Controller errors                    ",
 	"Unsupported RIO req received                         ",
+	"Link Reset RIO req received                          ",
 	"Linkdown per Deadman Monitor IRQ                     ",
 	/*
 	 * Peripheral Bus bridge, RapidIO -> Peripheral
