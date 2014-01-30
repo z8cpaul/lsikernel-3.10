@@ -27,7 +27,7 @@
 		serial0   = &UART0;
 		serial1   = &UART1;
 		ethernet0 = &FEMAC;
-		rapidio0  = &SRIO0;
+		rapidio0  = &rio0;
 	};
 
 	cpus {
@@ -393,14 +393,21 @@
                         0000 0 0 4 &MPIC 55 2
                 >;
         };
-	SRIO0: srio0 {
-		compatible = "acp,rapidio-delta";
+
+        rio0: rapidio@0x2100000000 {
+                index = <0>;
+                status = "okay";
+                #address-cells = <2>;
+                #size-cells = <2>;
+                compatible = "axxia,rapidio-delta";
                 device_type = "rapidio";
-		enabled = <0>;
-		#size = <0>;    /* 0 = (256, small system)
-				 * 1 = (65536, large system) */
-		reg = <0xf0020000 0x20000 0x1000>; /* SRIO Conf region */
+                reg = <0x0020 0x00560000 0x0 0x1000>; /* SRIO Conf 0 region */
+                ranges = <0x0 0x0 0x0021 0x00000000 0x0 0x40000000>;
+                linkdown-reset = <0x0200 0x100 0x0020 0x0040A000 0x0 0x000010000>;
 		interrupt-parent = <&MPIC>;
-		interrupts = <56 0x2 /* NCP_INTR_MPIC_SRC_AXIS_SRIO */>;
-	};
+                interrupts = <56 2>;
+                outb-dmes = <2 0x00000003 1 0x00000001>;
+		enable_ds = <1>;
+        };
+
 };
