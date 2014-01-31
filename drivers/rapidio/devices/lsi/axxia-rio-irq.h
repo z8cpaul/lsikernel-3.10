@@ -309,8 +309,8 @@ void axxia_rio_port_irq_disable(struct rio_mport *mport);
 **                  calls this function as well */
 int alloc_irq_handler(
 	struct rio_irq_handler *h,
-        void *data,
-        const char *name);
+	void *data,
+	const char *name);
 
 void release_irq_handler(struct rio_irq_handler *h);
 

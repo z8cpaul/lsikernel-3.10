@@ -511,11 +511,11 @@ struct rio_priv {
 
 	/* Chip-specific DME availability */
 	int numOutbDmes[2];	/* [0]=MSeg, [1]=Sseg */
-        int outbDmesInUse[2];
+	int outbDmesInUse[2];
 	int outbDmes[2];	/* set of defined outbound DMEs:
 				 *   [0]=MSeg, [1]=SSeg */
 	int numInbDmes[2];	/* [0]=MSeg, [1]=Sseg */
-        int inbDmesInUse[2];
+	int inbDmesInUse[2];
 	int inbDmes[2];		/* set of defined inbound DMEs */
 
 	/* Linkdown Reset; Trigger via SRDS STAT1 */

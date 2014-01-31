@@ -640,8 +640,8 @@ static ssize_t ib_dme_show(struct device *dev,
 			int desc_no = i;
 			u32 data;
 			__rio_local_read_config_32(mport,
-					   	DESC_TABLE_W0(desc_no),
-					   	&data);
+						DESC_TABLE_W0(desc_no),
+						&data);
 			if (data & DME_DESC_DW0_READY_MASK)
 				ready++;
 			if (data  & DME_DESC_DW0_VALID)
