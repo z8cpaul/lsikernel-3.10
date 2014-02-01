@@ -794,8 +794,7 @@ void axxia_rio_set_mport_disc_mode(struct rio_mport *mport)
 		__rio_local_write_config_32(mport,
 					    EPC_PNADIDCSR(priv->portNdx),
 					    result);
-		dev_dbg(priv->dev, "Port%dAltDevIdmCSR set to 0x%X for "
-			"main port\n",
+		dev_dbg(priv->dev, "Port%dAltDevIdmCSR set to 0x%X\n",
 			priv->portNdx, CONFIG_RAPIDIO_SECOND_DEST_ID);
 	}
 #else
@@ -813,8 +812,7 @@ void axxia_rio_set_mport_disc_mode(struct rio_mport *mport)
 		__rio_local_write_config_32(mport,
 					    EPC_PNADIDCSR(priv->portNdx),
 					    result);
-		dev_dbg(priv->dev, "Port%dAltDevIdmCSR set to 0x%X for "
-			"main port\n",
+		dev_dbg(priv->dev, "Port%dAltDevIdmCSR set to 0x%X\n",
 			priv->portNdx, result);
 	}
 #endif
@@ -1620,7 +1618,7 @@ static int axxia_rio_setup(struct platform_device *dev)
 	int numObDmes[2] = { 0, }, outbDmes[2] = { 0, };
 	int numIbDmes[2] = { 0, }, inbDmes[2] = { 0, };
 	struct event_regs linkdown_reset = { 0, };
-	struct rio_ds_dtb_info ds_dtb_info; /* data_streaming */
+	struct axxia_rio_ds_dtb_info ds_dtb_info; /* data_streaming */
 
 	/* Get address boundaries, etc. from DTB */
 	if (rio_parse_dtb(dev, &ndx, &law_start, &law_size, &regs,

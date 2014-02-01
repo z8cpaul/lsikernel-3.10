@@ -544,7 +544,8 @@ struct rio_priv {
 	void (*port_notify_cb)(struct rio_mport *mport);
 
 	/* data_streaming */
-	struct rio_ds_priv     ds_priv_data;
+	struct axxia_rio_ds_priv     ds_priv_data;
+	struct axxia_rio_ds_cfg      ds_cfg_data;
 };
 
 
