@@ -333,33 +333,6 @@ axxia_i2c_isr(int irq, void *_dev)
 	/* Clear interrupt */
 	writel(0x01, &idev->regs->interrupt_status);
 
-	if (unlikely(status & MST_STATUS_ERR)) {
-		idev->msg_err = status & MST_STATUS_ERR;
-		i2c_int_disable(idev, ~0);
-		dev_dbg(idev->dev, "error %s, rx=%u/%u tx=%u/%u\n",
-			status_str(idev->msg_err),
-			readl(&idev->regs->mst_rx_bytes_xfrd),
-			readl(&idev->regs->mst_rx_xfer),
-			readl(&idev->regs->mst_tx_bytes_xfrd),
-			readl(&idev->regs->mst_tx_xfer));
-		complete(&idev->msg_complete);
-		return IRQ_HANDLED;
-	}
-
-	/* Stop completed? */
-	if (status & MST_STATUS_SCC) {
-		i2c_int_disable(idev, ~0);
-		complete(&idev->msg_complete);
-	}
-
-	/* Transfer done? */
-	if (status & (MST_STATUS_SNS | MST_STATUS_SS)) {
-		if (i2c_m_rd(idev->msg) && idev->msg_xfrd < idev->msg->len)
-			axxia_i2c_empty_rx_fifo(idev);
-		i2c_int_disable(idev, ~0);
-		complete(&idev->msg_complete);
-	}
-
 	/* RX FIFO needs service? */
 	if (i2c_m_rd(idev->msg) && (status & MST_STATUS_RFL))
 		axxia_i2c_empty_rx_fifo(idev);
@@ -370,6 +343,29 @@ axxia_i2c_isr(int irq, void *_dev)
 			axxia_i2c_fill_tx_fifo(idev);
 		else
 			i2c_int_disable(idev, MST_STATUS_TFL);
+	}
+
+	if (status & MST_STATUS_SCC) {
+		/* Stop completed? */
+		i2c_int_disable(idev, ~0);
+		complete(&idev->msg_complete);
+	} else if (status & (MST_STATUS_SNS | MST_STATUS_SS)) {
+		/* Transfer done? */
+		if (i2c_m_rd(idev->msg) && idev->msg_xfrd < idev->msg->len)
+			axxia_i2c_empty_rx_fifo(idev);
+		i2c_int_disable(idev, ~0);
+		complete(&idev->msg_complete);
+	} else if (unlikely(status & MST_STATUS_ERR)) {
+		/* Transfer error? */
+		idev->msg_err = status & MST_STATUS_ERR;
+		i2c_int_disable(idev, ~0);
+		dev_dbg(idev->dev, "error %s, rx=%u/%u tx=%u/%u\n",
+			status_str(idev->msg_err),
+			readl(&idev->regs->mst_rx_bytes_xfrd),
+			readl(&idev->regs->mst_rx_xfer),
+			readl(&idev->regs->mst_tx_bytes_xfrd),
+			readl(&idev->regs->mst_tx_xfer));
+		complete(&idev->msg_complete);
 	}
 
 	return IRQ_HANDLED;
