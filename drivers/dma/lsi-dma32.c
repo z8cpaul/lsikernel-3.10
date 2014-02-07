@@ -59,6 +59,9 @@
 #define ch_dbg(dmac, fmt, ...)       do {} while (0)
 #endif
 
+static unsigned int burst = 5;
+module_param(burst, uint, 0644);
+MODULE_PARM_DESC(burst, "Set preferred bust size during DMA transfters");
 
 static void reset_channel(struct gpdma_channel *dmac)
 {
@@ -416,6 +419,8 @@ gpdma_prep_memcpy(struct dma_chan *chan,
 	struct gpdma_channel *dmac = to_gpdma_chan(chan);
 	struct gpdma_desc *desc;
 	u16 rot_len, x_count, src_size, access_size;
+	u16 src_burst = burst;
+	u16 dst_burst = burst;
 
 	desc = get_descriptor(dmac->engine);
 	if (desc == NULL) {
@@ -461,8 +466,11 @@ gpdma_prep_memcpy(struct dma_chan *chan,
 	desc->hw.src_y_mod     = 0;
 	desc->hw.src_addr      = cpu_to_le32(src & 0xffffffff);
 	desc->hw.src_data_mask = ~0;
-	desc->hw.src_access    = cpu_to_le16((rot_len << 6) | access_size);
-	desc->hw.dst_access    = cpu_to_le16(access_size);
+	desc->hw.src_access    = cpu_to_le16((rot_len << 6) |
+					     access_size |
+					     (src_burst & 7));
+	desc->hw.dst_access    = cpu_to_le16(access_size |
+					     (dst_burst & 7));
 	desc->hw.ch_config     = cpu_to_le32(DMA_CONFIG_ONE_SHOT(1));
 	desc->hw.next_ptr      = 0;
 	desc->hw.dst_x_ctr     = cpu_to_le16(x_count);
