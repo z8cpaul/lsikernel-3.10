@@ -311,8 +311,7 @@ arm_pciex_axxia_read_config(struct pci_bus *bus,
 	}
 
 #ifdef PRINT_CONFIG_ACCESSES
-	pr_info("acp_read_config for PCIE%d: %3d  fn=0x%04x o=0x%04x l=%d "
-		"a=0x%08x v=0x%08x, dev=%d\n",
+	pr_info("acp_read_config for PCIE%d: %3d  fn=0x%04x o=0x%04x l=%d a=0x%08x v=0x%08x, dev=%d\n",
 			port->index, bus->number, devfn, offset, len,
 			bus_addr, *val, PCI_SLOT(devfn));
 #endif
@@ -376,8 +375,7 @@ arm_pciex_axxia_write_config(struct pci_bus *bus,
 	}
 
 #ifdef PRINT_CONFIG_ACCESSES
-	pr_info("acp_write_config: bus=%3d devfn=0x%04x offset=0x%04x len=%d"
-		"addr=0x%08x val=0x%08x\n",
+	pr_info("acp_write_config: bus=%3d devfn=0x%04x offset=0x%04x len=%d addr=0x%08x val=0x%08x\n",
 		bus->number, devfn, offset, len, bus_addr, val);
 #endif
 
