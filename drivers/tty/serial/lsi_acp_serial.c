@@ -766,8 +766,13 @@ acp_serial_set_termios(struct uart_port *port, struct ktermios *termios,
 	out_le32((u32 *)(uap->port.membase + UART011_CR), 0);
 
 	/* Set baud rate */
+#if 0
 	out_le32((u32 *)(uap->port.membase + UART011_FBRD), uap->fbrd);
 	out_le32((u32 *)(uap->port.membase + UART011_IBRD), uap->ibrd);
+#else
+	out_le32((u32 *)(uap->port.membase + UART011_FBRD), 0x13);
+	out_le32((u32 *)(uap->port.membase + UART011_IBRD), 0x598);
+#endif
 
 	/*
 	 * ----------v----------v----------v----------v-----
