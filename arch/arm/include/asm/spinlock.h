@@ -38,16 +38,8 @@
 	"nop.w"					\
 )
 #else
-
-#if defined(CONFIG_ARCH_AXXIA)
-/* Disable use of wfe/sev in Axxia. */
-#define SEV
-#define WFE(cond)
-#else
 #define SEV		ALT_SMP("sev", "nop")
 #define WFE(cond)	ALT_SMP("wfe" cond, "nop")
-#endif
-
 #endif
 
 static inline void dsb_sev(void)
@@ -96,13 +88,9 @@ static inline void arch_spin_lock(arch_spinlock_t *lock)
 	: "cc");
 
 	while (lockval.tickets.next != lockval.tickets.owner) {
-#if 0
 #ifdef CONFIG_ARCH_AXXIA
 		extern void __axxia_arch_wfe(void);
 		__axxia_arch_wfe();
-#else
-		wfe();
-#endif
 #else
 		wfe();
 #endif

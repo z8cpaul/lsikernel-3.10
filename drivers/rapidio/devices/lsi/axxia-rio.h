@@ -533,6 +533,9 @@ struct rio_priv {
 	int inb_dmes_in_use[2];
 	int inb_dmes[2];	/* set of defined inbound DMEs */
 
+	struct rio_tx_dme      ob_dme_shared[DME_MAX_OB_ENGINES];
+	struct rio_tx_mbox     ob_mbox[RIO_MAX_TX_MBOX];
+
 	/* Linkdown Reset; Trigger via SRDS STAT1 */
 	struct event_regs linkdown_reset;
 

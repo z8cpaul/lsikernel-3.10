@@ -1408,8 +1408,10 @@ static int rio_mport_dtb_setup(struct platform_device *dev,
 		return -ENOMEM;
 	}
 	rio_init_dbell_res(&mport->riores[RIO_DOORBELL_RESOURCE], 0, 0xffff);
-	rio_init_mbox_res(&mport->riores[RIO_INB_MBOX_RESOURCE], 0, 64);
-	rio_init_mbox_res(&mport->riores[RIO_OUTB_MBOX_RESOURCE], 0, 3);
+	rio_init_mbox_res(&mport->riores[RIO_INB_MBOX_RESOURCE], 0,
+			RIO_MAX_RX_MBOX);
+	rio_init_mbox_res(&mport->riores[RIO_OUTB_MBOX_RESOURCE], 0,
+			RIO_MAX_TX_MBOX);
 	sprintf(mport->name, "RIO%d mport", mport->id);
 
 	mport->ops = ops;
