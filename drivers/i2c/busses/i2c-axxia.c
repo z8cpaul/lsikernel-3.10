@@ -207,14 +207,13 @@ axxia_i2c_init(struct axxia_i2c_dev *idev)
 	/*
 	   Find the prescaler value that makes tmo_clk fit in 15-bits counter.
 	 */
-	for (prescale=0; prescale < 15; ++prescale) {
+	for (prescale = 0; prescale < 15; ++prescale) {
 		if (tmo_clk <= 0x7fff)
 			break;
 		tmo_clk >>= 1;
 	}
-	if (tmo_clk > 0x7fff) {
+	if (tmo_clk > 0x7fff)
 		tmo_clk = 0x7fff;
-	}
 
 	/* Prescale divider (log2) */
 	writel(prescale, &idev->regs->timer_clock_div);
@@ -358,9 +357,8 @@ axxia_i2c_isr(int irq, void *_dev)
 	}
 
 	/* RX FIFO needs service? */
-	if (i2c_m_rd(idev->msg) && (status & MST_STATUS_RFL)) {
+	if (i2c_m_rd(idev->msg) && (status & MST_STATUS_RFL))
 		axxia_i2c_empty_rx_fifo(idev);
-	}
 
 	/* TX FIFO needs service? */
 	if (!i2c_m_rd(idev->msg) && (status & MST_STATUS_TFL)) {
@@ -421,7 +419,8 @@ axxia_i2c_xfer_msg(struct axxia_i2c_dev *idev, struct i2c_msg *msg)
 
 	i2c_int_enable(idev, int_mask);
 
-	ret = wait_for_completion_timeout(&idev->msg_complete, I2C_XFER_TIMEOUT);
+	ret = wait_for_completion_timeout(&idev->msg_complete,
+			I2C_XFER_TIMEOUT);
 
 	i2c_int_disable(idev, int_mask);
 
@@ -452,11 +451,11 @@ axxia_i2c_stop(struct axxia_i2c_dev *idev)
 	/* Issue stop */
 	writel(0xb, &idev->regs->mst_command);
 	i2c_int_enable(idev, int_mask);
-	ret = wait_for_completion_timeout(&idev->msg_complete, I2C_STOP_TIMEOUT);
+	ret = wait_for_completion_timeout(&idev->msg_complete,
+			I2C_STOP_TIMEOUT);
 	i2c_int_disable(idev, int_mask);
-	if (ret == 0) {
+	if (ret == 0)
 		return -ETIMEDOUT;
-	}
 
 	WARN_ON(readl(&idev->regs->mst_command) & 0x8);
 
@@ -470,9 +469,8 @@ axxia_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	int i;
 	int ret = 0;
 
-	for (i = 0; ret == 0 && i < num; i++) {
+	for (i = 0; ret == 0 && i < num; i++)
 		ret = axxia_i2c_xfer_msg(idev, &msgs[i]);
-	}
 
 	axxia_i2c_stop(idev);
 
@@ -482,10 +480,10 @@ axxia_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 static u32
 axxia_i2c_func(struct i2c_adapter *adap)
 {
-	return (I2C_FUNC_I2C |
+	return I2C_FUNC_I2C |
 		I2C_FUNC_10BIT_ADDR |
 		I2C_FUNC_SMBUS_EMUL |
-		I2C_FUNC_SMBUS_BLOCK_DATA);
+		I2C_FUNC_SMBUS_BLOCK_DATA;
 
 }
 
@@ -533,7 +531,7 @@ axxia_i2c_probe(struct platform_device *pdev)
 	}
 
 	idev->base         = base;
-	idev->regs         = (struct __iomem i2c_regs *) base;
+	idev->regs         = (struct __iomem i2c_regs*) base;
 	idev->i2c_clk      = i2c_clk;
 	idev->dev          = &pdev->dev;
 	init_completion(&idev->msg_complete);
