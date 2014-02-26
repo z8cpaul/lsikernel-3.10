@@ -504,7 +504,6 @@ struct rio_priv {
 	u32     cookie;
 
 	spinlock_t api_lock;
-	unsigned long api_lock_flags;
 	spinlock_t port_lock;
 
 	struct rio_mport *mport;
@@ -570,16 +569,6 @@ struct rio_priv {
 /**********************************************/
 /* *********** External Functions *********** */
 /**********************************************/
-
-static inline void axxia_api_lock(struct rio_priv *priv)
-{
-	spin_lock_irqsave(&priv->api_lock, priv->api_lock_flags);
-}
-
-static inline void axxia_api_unlock(struct rio_priv *priv)
-{
-	spin_unlock_irqrestore(&priv->api_lock, priv->api_lock_flags);
-}
 
 extern int axxia_rio_start_port(struct rio_mport *mport);
 extern void axxia_rio_set_mport_disc_mode(struct rio_mport *mport);

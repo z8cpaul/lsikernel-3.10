@@ -304,8 +304,8 @@ int axxia_open_inb_mbox(struct rio_mport *mport, void *dev_id,
 int axxia_add_outb_message(struct rio_mport *mport, struct rio_dev *rdev,
 			     int mbox_dest, int letter, int flags,
 			     void *buffer, size_t len, void *cookie);
-void axxia_close_outb_mbox(struct rio_mport *mport, int mboxId);
-int axxia_open_outb_mbox(struct rio_mport *mport, void *dev_id, int mboxId,
+void axxia_close_outb_mbox(struct rio_mport *mport, int mbox_id);
+int axxia_open_outb_mbox(struct rio_mport *mport, void *dev_id, int mbox_id,
 			 int entries, int prio);
 int axxia_rio_doorbell_send(struct rio_mport *mport,
 			      int index, u16 destid, u16 data);
@@ -319,7 +319,7 @@ int alloc_irq_handler(
 	void *data,
 	const char *name);
 
-void release_mbox_resources(struct rio_priv *priv, int mboxId);
+void release_mbox_resources(struct rio_priv *priv, int mbox_id);
 void release_irq_handler(struct rio_irq_handler *h);
 
 #ifdef CONFIG_AXXIA_RIO_STAT

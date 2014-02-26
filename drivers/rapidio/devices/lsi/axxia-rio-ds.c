@@ -406,8 +406,9 @@ int axxia_open_ob_data_stream(
 {
 	int			rc = 0;
 	struct rio_priv *priv = mport->priv;
+	unsigned long lflags;
 
-	axxia_api_lock(priv);
+	spin_lock_irqsave(&priv->api_lock, lflags);
 
 	rc = open_ob_data_stream(mport,
 				dev_id,
@@ -415,7 +416,7 @@ int axxia_open_ob_data_stream(
 				num_header_entries,
 				num_data_entries);
 
-	axxia_api_unlock(priv);
+	spin_unlock_irqrestore(&priv->api_lock, lflags);
 
 	return rc;
 }
@@ -771,14 +772,15 @@ int axxia_close_ob_data_stream(
 	struct axxia_rio_ds_cfg       *ptr_ds_cfg = &(priv->ds_cfg_data);
 	struct axxia_rio_obds_dse_cfg *ptr_dse_cfg;
 	struct axxia_rio_ds_hdr_desc  *ptr_hdr_desc;
+	unsigned long lflags;
 	u32    dse_ctrl, i;
 
-	axxia_api_lock(priv);
+	spin_lock_irqsave(&priv->api_lock, lflags);
 
 	ptr_dse_cfg = &(ptr_ds_cfg->obds_dse_cfg[dse_id]);
 
 	if (ptr_dse_cfg->in_use == RIO_DS_FALSE) {
-		axxia_api_unlock(priv);
+		spin_unlock_irqrestore(&priv->api_lock, lflags);
 		return 0;
 	}
 
@@ -817,7 +819,7 @@ int axxia_close_ob_data_stream(
 	/* release the IRQ handler */
 	release_irq_handler(&(ptr_ds_priv->ob_dse_irq[dse_id]));
 
-	axxia_api_unlock(priv);
+	spin_unlock_irqrestore(&priv->api_lock, lflags);
 
 	return 0;
 }
@@ -1107,8 +1109,9 @@ int axxia_open_ib_data_stream(
 {
 	int rc = 0;
 	struct rio_priv *priv = mport->priv;
+	unsigned long lflags;
 
-	axxia_api_lock(priv);
+	spin_lock_irqsave(&priv->api_lock, lflags);
 
 	rc = open_ib_data_stream(mport,
 				 dev_id,
@@ -1116,7 +1119,7 @@ int axxia_open_ib_data_stream(
 				 cos,
 				 desc_dbuf_size,
 				 num_entries);
-	axxia_api_unlock(priv);
+	spin_unlock_irqrestore(&priv->api_lock, lflags);
 
 	return rc;
 }
@@ -1592,11 +1595,12 @@ int axxia_close_ib_data_stream(
 	struct axxia_rio_ds_cfg       *ptr_ds_cfg  = &(priv->ds_cfg_data);
 	struct axxia_ibds_virt_m_cfg  *ptr_virt_m_cfg;
 	struct axxia_rio_ids_data_desc *ptr_data_desc;
+	unsigned long lflags;
 	u8      find_ava_virt_m = RIO_DS_FALSE;
 	u8      i;
 	u8      virt_vsid;
 
-	axxia_api_lock(priv);
+	spin_lock_irqsave(&priv->api_lock, lflags);
 
 	for (i = 0; i < (ptr_ds_cfg->num_ibds_virtual_m); i++) {
 		ptr_virt_m_cfg = &(ptr_ds_cfg->ibds_vsid_m_cfg[i]);
@@ -1611,7 +1615,7 @@ int axxia_close_ib_data_stream(
 	}
 
 	if (find_ava_virt_m == RIO_DS_FALSE) {
-		axxia_api_unlock(priv);
+		spin_unlock_irqrestore(&priv->api_lock, lflags);
 		return 0;
 	}
 
@@ -1641,7 +1645,7 @@ int axxia_close_ib_data_stream(
 	if (ptr_virt_m_cfg->ptr_ibds_data_desc != NULL)
 		kfree(ptr_virt_m_cfg->ptr_ibds_data_desc);
 
-	axxia_api_unlock(priv);
+	spin_unlock_irqrestore(&priv->api_lock, lflags);
 
 	return 0;
 }
