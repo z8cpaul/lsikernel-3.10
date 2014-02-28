@@ -81,7 +81,6 @@ struct uart_acp_port {
 	unsigned int interrupt_mask;
 	unsigned int old_status;
 	void *timer_base;
-	unsigned long divisor;
 	unsigned short ibrd;
 	unsigned short fbrd;
 };
@@ -119,32 +118,10 @@ struct uart_acp_port {
 static int
 get_clock_stuff(struct uart_acp_port *port, int baud_rate)
 {
-	struct device_node *np;
-	unsigned long divisor;
 	unsigned long ibrd;
 	unsigned long fbrd;
 
-	np = of_find_compatible_node(NULL, NULL, "lsi,acp3500");
-
-	if (NULL == np) {
-		/*
-		  Since the IBDR (integer part of the baud rate
-		  divisor) is a 16 bit quatity, find the minimum load
-		  value that will let the IBDR/FBDR result in the
-		  desired baud rate.
-		*/
-
-		if (1000000 < per_clock) {
-			divisor = per_clock / 25000000;
-			ibrd = 25000000 / (16 * baud_rate);
-		} else {
-			/* Emulation is much slower... */
-			divisor = per_clock / 3250000;
-			ibrd = 3250000 / (16 * baud_rate);
-		}
-	} else {
-		ibrd = per_clock / (16 * baud_rate);
-	}
+	ibrd = per_clock / (16 * baud_rate);
 
 	/*
 	 * The following formula is from the ARM document (ARM DDI 0183E).
@@ -171,10 +148,7 @@ get_clock_stuff(struct uart_acp_port *port, int baud_rate)
 	 *                     2 * (16 * baud_rate)
 	 */
 
-	if (NULL == np)
-		port->port.uartclk = (per_clock / divisor);
-	else
-		port->port.uartclk = per_clock;
+	port->port.uartclk = per_clock;
 
 	fbrd = port->port.uartclk % (16 * baud_rate);
 	fbrd *= 128;
@@ -183,31 +157,6 @@ get_clock_stuff(struct uart_acp_port *port, int baud_rate)
 
 	port->ibrd = (unsigned short) ibrd;
 	port->fbrd = (unsigned short) fbrd;
-
-	if (NULL == np) {
-		port->divisor = (divisor - 1);
-
-		if (port->divisor != in_le32(port->timer_base + TIMER_LOAD)) {
-			while (0 ==
-			       (in_le32((const volatile unsigned *)
-					(port->port.membase + UART01x_FR)) &
-				UART011_FR_TXFE))
-				;
-
-			while (0 !=
-			       (in_le32((const volatile unsigned *)
-					(port->port.membase + UART01x_FR)) &
-				UART01x_FR_BUSY))
-				;
-
-			out_le32((port->timer_base + TIMER_CONTROL), 0);
-			out_le32((port->timer_base + TIMER_LOAD),
-				 port->divisor);
-			out_le32((port->timer_base + TIMER_CONTROL),
-				 (TIMER_CONTROL_ENABLE |
-				  TIMER_CONTROL_MODE));
-		}
-	}
 
 	return 0;
 }
@@ -1151,6 +1100,51 @@ acp_serial_add_ports(struct uart_driver *driver)
 		}
 	} else {
 		ret = -ENOMEM;
+	}
+
+	np = of_find_compatible_node(NULL, NULL, "lsi,acp3500");
+
+	if (NULL == np) {
+		unsigned long divisor;
+
+		/*
+		  In the 3500 case, the peripheral clock is connected
+		  directly to the UART.  If this isn't 3500, set up
+		  the second timer (which is in between the peripheral
+		  clock and the UART) and adjust per_clock
+		  accordingly.
+		*/
+
+		if (1000000 < per_clock) {
+			divisor = per_clock / 25000000;
+			per_clock = 25000000;
+		} else {
+			/* Emulation is much slower... */
+			divisor = per_clock / 3250000;
+			per_clock = 3250000;
+		}
+
+		--divisor;
+
+		if (divisor != in_le32(uap->timer_base + TIMER_LOAD)) {
+			while (0 ==
+			       (in_le32((const volatile unsigned *)
+					(uap->port.membase + UART01x_FR)) &
+				UART011_FR_TXFE))
+				;
+
+			while (0 !=
+			       (in_le32((const volatile unsigned *)
+					(uap->port.membase + UART01x_FR)) &
+				UART01x_FR_BUSY))
+				;
+
+			out_le32((uap->timer_base + TIMER_CONTROL), 0);
+			out_le32((uap->timer_base + TIMER_LOAD), divisor);
+			out_le32((uap->timer_base + TIMER_CONTROL),
+				 (TIMER_CONTROL_ENABLE |
+				  TIMER_CONTROL_MODE));
+		}
 	}
 
 	dt_baud_rate = baud_rate;
