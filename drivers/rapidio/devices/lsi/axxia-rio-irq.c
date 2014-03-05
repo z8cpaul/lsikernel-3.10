@@ -2340,17 +2340,17 @@ int axxia_open_outb_mbox(
 void axxia_close_outb_mbox(struct rio_mport *mport, int mbox_id)
 {
 	struct rio_priv *priv = mport->priv;
+	struct rio_tx_mbox *mb = &priv->ob_mbox[mbox_id];
+	unsigned long iflags0, iflags1;
 	int dme_no;
-	unsigned long lflags;
-	unsigned long iflags0;
 
 	if ((mbox_id < 0) ||
 	    (mbox_id > RIO_MAX_TX_MBOX) ||
 	    (!test_bit(RIO_DME_OPEN, &priv->ob_mbox[mbox_id].state)))
 		return;
 
-	spin_lock_irqsave(&priv->api_lock, lflags);
-	spin_lock_irqsave(&priv->ob_mbox[mbox_id].lock, iflags0);
+	spin_lock_irqsave(&priv->api_lock, iflags0);
+	spin_lock_irqsave(&mb->lock, iflags1);
 
 	/* release_irq_handler(&priv->ob_dme_irq[mboxDme]); */
 
@@ -2360,8 +2360,8 @@ void axxia_close_outb_mbox(struct rio_mport *mport, int mbox_id)
 	priv->ob_mbox[mbox_id].ring_size = 0;
 	clear_bit(RIO_DME_OPEN, &priv->ob_mbox[mbox_id].state);
 
-	spin_unlock_irqrestore(&priv->ob_mbox[mbox_id].lock, iflags0);
-	spin_unlock_irqrestore(&priv->api_lock, lflags);
+	spin_unlock_irqrestore(&mb->lock, iflags1);
+	spin_unlock_irqrestore(&priv->api_lock, iflags0);
 
 	return;
 }
@@ -2429,7 +2429,7 @@ int axxia_add_outb_message(struct rio_mport *mport, struct rio_dev *rdev,
 	u32 dw0, dw1, dme_ctrl;
 	u16 destid = (rdev ? rdev->destid : mport->host_deviceid);
 	struct rio_priv *priv = mport->priv;
-	struct rio_msg_dme *mb = priv->ob_mbox[mbox_dest].me;
+	struct rio_msg_dme *me = priv->ob_mbox[mbox_dest].me;
 	struct rio_msg_desc *desc;
 	unsigned long iflags;
 
@@ -2440,37 +2440,35 @@ int axxia_add_outb_message(struct rio_mport *mport, struct rio_dev *rdev,
 	    (buffer    == NULL))
 		return -EINVAL;
 
-	/* Should we have another spin lock nesting for the mbox here?
+	/* Should we have another spin lock nesting for the mailbox here?
 	** Depends upon the frequency of mailbox open/close.
 	*/
 
 	if (!test_bit(RIO_DME_OPEN, &priv->ob_mbox[mbox_dest].state))
 		return -EINVAL;
 
-	mb = priv->ob_mbox[mbox_dest].me;
-	buf_sz = mb->sz;
-
+	buf_sz = me->sz;
 	if ((len < 8) || (len > buf_sz))
 		return -EINVAL;
 
-	mb = dme_get(mb);
-	if (!mb)
+	me = dme_get(me);
+	if (!me)
 		return -EINVAL;
 
 	/* Choose a free descriptor in a critical section */
-	spin_lock_irqsave(&mb->lock, iflags);
-	desc = get_ob_desc(mport, mb);
+	spin_lock_irqsave(&me->lock, iflags);
+	desc = get_ob_desc(mport, me);
 	if (!desc) {
-		spin_unlock_irqrestore(&mb->lock, iflags);
-		__ob_dme_event_dbg(priv, mb->dme_no,
+		spin_unlock_irqrestore(&me->lock, iflags);
+		__ob_dme_event_dbg(priv, me->dme_no,
 				   1 << RIO_OB_DME_TX_PUSH_RING_FULL);
 		rc = -EBUSY;
 		goto done;
 	}
-	mb->entries_in_use++;
-	spin_unlock_irqrestore(&mb->lock, iflags);
+	me->entries_in_use++;
+	spin_unlock_irqrestore(&me->lock, iflags);
 
-	__ob_dme_event_dbg(priv, mb->dme_no, 1 << RIO_OB_DME_TX_PUSH);
+	__ob_dme_event_dbg(priv, me->dme_no, 1 << RIO_OB_DME_TX_PUSH);
 	desc->cookie = cookie;
 
 	/* Copy and clear rest of buffer */
@@ -2496,8 +2494,8 @@ int axxia_add_outb_message(struct rio_mport *mport, struct rio_dev *rdev,
 		DME_DESC_DW1_LETTER(letter);
 
 	if (!priv->intern_msg_desc) {
-		*((u32 *)DESC_TABLE_W1_MEM(mb, desc->desc_no)) = dw1;
-		*((u32 *)DESC_TABLE_W0_MEM(mb, desc->desc_no)) = dw0;
+		*((u32 *)DESC_TABLE_W1_MEM(me, desc->desc_no)) = dw1;
+		*((u32 *)DESC_TABLE_W0_MEM(me, desc->desc_no)) = dw0;
 	} else {
 		__rio_local_write_config_32(mport,
 					 DESC_TABLE_W1(desc->desc_no), dw1);
@@ -2506,12 +2504,12 @@ int axxia_add_outb_message(struct rio_mport *mport, struct rio_dev *rdev,
 	}
 
 	/* Start / Wake up */
-	axxia_local_config_read(priv, RAB_OB_DME_CTRL(mb->dme_no), &dme_ctrl);
+	axxia_local_config_read(priv, RAB_OB_DME_CTRL(me->dme_no), &dme_ctrl);
 	dme_ctrl |= DME_WAKEUP | DME_ENABLE;
-	axxia_local_config_write(priv, RAB_OB_DME_CTRL(mb->dme_no), dme_ctrl);
+	axxia_local_config_write(priv, RAB_OB_DME_CTRL(me->dme_no), dme_ctrl);
 
 done:
-	dme_put(mb);
+	dme_put(me);
 	return rc;
 }
 

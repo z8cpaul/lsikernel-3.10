@@ -58,8 +58,10 @@
 #define IB_VSID_M_PREFETCH_WAKEUP	(4)
 
 #define RAB_OBDSE_CTRL(n)		(RAB_REG_BASE + (0x2d28 + (0xC*(n))))
-#define RAB_OBDSE_STAT(n)		(RAB_REG_BASE + (0x2d28 + (0xC*(n)))+0x4)
-#define RAB_OBDSE_DESC_ADDR(n)		(RAB_REG_BASE + (0x2d28 + (0xC*(n)))+0x8)
+#define RAB_OBDSE_STAT(n) \
+	(RAB_REG_BASE + (0x2d28 + (0xC*(n)))+0x4)
+#define RAB_OBDSE_DESC_ADDR(n) \
+	(RAB_REG_BASE + (0x2d28 + (0xC*(n)))+0x8)
 
 #define RAB_IBVIRT_M_STAT(n)		(RAB_REG_BASE + (0x2ef0 + (0x4*(n))))
 
@@ -68,8 +70,10 @@
 #define RAB_IBDSE_STAT(n) \
 	(RAB_REG_BASE + (0x2a20 + (0x8 * (n))) + 0x4)
 
-#define RAB_IBDS_VSID_ADDR_LOW(n)	(RAB_REG_BASE + (0x2b28 + (0x8*(n))))
-#define RAB_IBDS_VSID_ADDR_HI(n)	(RAB_REG_BASE + (0x2b28 + (0x8*(n)))+0x4)
+#define RAB_IBDS_VSID_ADDR_LOW(n) \
+	(RAB_REG_BASE + (0x2b28 + (0x8*(n))))
+#define RAB_IBDS_VSID_ADDR_HI(n) \
+	(RAB_REG_BASE + (0x2b28 + (0x8*(n)))+0x4)
 
 #define RAB_IBDS_VSID_ALIAS		(RAB_REG_BASE + 0x2a1c)
 #define GRIO_DSI_CAR			(0x3c)
@@ -94,6 +98,7 @@
 #define IB_DSE_DESC_AXI_ERR		(1 << 11)
 #define IB_DSE_DESC_DS_ERR		(1 << 10)
 #define IB_DSE_DESC_DONE		(1 << 9)
+#define IB_DSE_DESC_VALID		(1 << 0)
 
 #define IB_DSE_VSID_IN_USE		0x3F
 #define IB_DSE_STAT_TRANS_PENDING	(1 << 6)
@@ -109,6 +114,13 @@
 #define OB_DSE_DESC_ERROR_MASK		0x400
 #define OB_HDR_DESC_AXI_ERR		(1 << 10)
 #define OB_HDR_DESC_DONE		(1 << 8)
+#define OB_HDR_DESC_INT_EN		(1 << 5)
+#define OB_HDR_DESC_NEXT_DESC_VALID	(1 << 1)
+#define OB_HDR_DESC_VALID		(1 << 0)
+
+#define IB_HDR_DESC_INT_EN		(1 << 3)
+#define IB_HDR_DESC_NEXT_DESC_VALID	(1 << 1)
+#define IB_HDR_DESC_VALID		(1 << 0)
 
 /******************************************************************************
 **  Type Definitions for registers & APIs
@@ -170,11 +182,10 @@ struct axxia_rio_obds_dse_cfg {
 	u8		cos;
 	u16		dest_id;
 	u16		stream_id;
-	u8		irqEnabled;
 	char		name[16];
 
 	/* header descriptor */
-	u16		num_hdr_desc_free;
+	atomic_t	num_hdr_desc_free;
 	u16		max_num_hdr_desc;
 
 	/* data descriptor */
@@ -182,11 +193,9 @@ struct axxia_rio_obds_dse_cfg {
 	u16		max_num_data_desc;
 	u16		hdr_read_ptr;
 	u16		hdr_write_ptr;
-	u8		first_hdr_desc;
 
 	u16		data_read_ptr;
 	u16		data_write_ptr;
-	u8		first_data_desc;
 
 	struct axxia_rio_ds_hdr_desc    *ptr_obds_hdr_desc;
 	struct axxia_rio_ods_data_desc  *ptr_obds_data_desc;
@@ -204,7 +213,7 @@ struct axxia_ibds_virt_m_cfg {
 	u16		source_id;
 	char		name[16];
 
-	u16		num_desc_free;
+	atomic_t	num_desc_free;
 	u16		max_num_data_desc;
 	u16		data_read_ptr;
 	u16		data_write_ptr;
@@ -212,7 +221,7 @@ struct axxia_ibds_virt_m_cfg {
 	struct axxia_rio_ids_data_desc    *ptr_ibds_data_desc;
 	u32		desc_dbuf_size;
 	u32		buf_add_ptr;
-	u32		num_hw_written_bufs;
+	atomic_t	num_hw_written_bufs;
 
 	u32		alias_reg_value;
 	u16		virt_vsid;
