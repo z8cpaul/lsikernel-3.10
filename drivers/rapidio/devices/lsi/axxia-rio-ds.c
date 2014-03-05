@@ -468,6 +468,9 @@ int axxia_add_ob_data_stream(
 	u32	next_desc_high, data_buf_high;
 	unsigned long	next_desc_ptr_phy, data_buf_phy;
 	int     rc = 0;
+	unsigned long lflags, iflags;
+
+	spin_lock_irqsave(&priv->api_lock, lflags);
 
 	/* Sanity check - TBD */
 	ptr_ds_priv = &(priv->ds_priv_data);
@@ -475,21 +478,26 @@ int axxia_add_ob_data_stream(
 
 	/*
 	** There is a maximum of 16 DSEs, each DSE can handle one
-	** descriptor chain, however different stream_id can be
+	** descriptor chain, however, a different stream_id can be
 	** chained in the same descriptor chain.
 	*/
 	dse_id = (stream_id % (ptr_ds_cfg->num_obds_dses));
 	ptr_dse_cfg = &(ptr_ds_cfg->obds_dse_cfg[dse_id]);
+	spin_lock_irqsave(&ptr_dse_cfg->lock, iflags);
 
 	/* If the DSE has not been configured, return an error */
-	if (ptr_dse_cfg->in_use == RIO_DS_FALSE)
-		return -EINVAL;
+	if (ptr_dse_cfg->in_use == RIO_DS_FALSE) {
+		rc = -EINVAL;
+		goto done;
+	}
 
 	/* Check if there is a space for the new data */
 	if (is_hdr_desc) {
 		if (atomic_read(&ptr_dse_cfg->num_hdr_desc_free) ==
-				NUM_HDR_DESC_FREE_LIMIT)
-			return -ENOMEM;
+				NUM_HDR_DESC_FREE_LIMIT) {
+			rc = -ENOMEM;
+			goto done;
+		}
 
 		/* Get the header descriptor */
 		hdr_write_ptr = ptr_dse_cfg->hdr_write_ptr;
@@ -588,7 +596,8 @@ int axxia_add_ob_data_stream(
 
 	} else {
 		/* header and data descriptor combination support TBD */
-		return -EINVAL;
+		rc = -EINVAL;
+		goto done;
 	}
 
 	/* Check if the DSE is in sleep mode, if it is, wake up */
@@ -620,6 +629,9 @@ int axxia_add_ob_data_stream(
 					dse_ctrl);
 	}
 
+done:
+	spin_unlock_irqrestore(&ptr_dse_cfg->lock, iflags);
+	spin_unlock_irqrestore(&priv->api_lock, lflags);
 	return rc;
 }
 EXPORT_SYMBOL(axxia_add_ob_data_stream);
@@ -644,10 +656,9 @@ void ob_dse_irq_handler(struct rio_irq_handler *h, u32 state)
 	u32 dse_stat, dse_id;
 	u16 hdr_read_ptr;
 	u32 is_hdr_desc_done = 1;
-	unsigned long flags;
-	u8  i;
-
 	u32 num_desc_processed = 0;
+	unsigned long flags;
+	int i;
 
 	/* Find the DSE that gets interrupted, CNTLZW found the upper
 	** bit first */
@@ -1144,6 +1155,7 @@ int axxia_add_ibds_buffer(
 	void		  *buf,
 	int		   buf_size)
 {
+	int    rc = 0;
 	struct rio_priv           *priv = mport->priv;
 	struct axxia_rio_ds_cfg   *ptr_ds_cfg = &(priv->ds_cfg_data);
 	struct axxia_ibds_virt_m_cfg  *ptr_virt_m_cfg;
@@ -1159,10 +1171,12 @@ int axxia_add_ibds_buffer(
 	unsigned long data_addr_phy;
 	u32    data_addr_hi;
 
-	unsigned long iflags;
+	unsigned long lflags, iflags;
 
 	if (buf == NULL)
 		return -EINVAL;
+
+	spin_lock_irqsave(&priv->api_lock, lflags);
 
 	/* Search through the virtual M table to find the one that has
 	**  the same source_id and cos. */
@@ -1186,13 +1200,17 @@ int axxia_add_ibds_buffer(
 		}
 	}
 
-	if (found_one == RIO_DS_FALSE)
-		return RC_TBD;
+	if (found_one == RIO_DS_FALSE) {
+		rc = RC_TBD;
+		goto done;
+	}
 
 #if 0
 	/* Check if the buf_size is smaller than the desc_dbuf_size - TBD */
-	if (buf_size > ptr_virt_m_cfg->desc_dbuf_size)
-		return -EINVAL;
+	if (buf_size > ptr_virt_m_cfg->desc_dbuf_size) {
+		rc = -EINVAL;
+		goto done;
+	}
 #endif
 
 	/*
@@ -1206,8 +1224,10 @@ int axxia_add_ibds_buffer(
 	**	up with.  When SW can not keep up with, the HW will
 	**	drop the newly received data.
 	*/
-	if (atomic_read(&ptr_virt_m_cfg->num_desc_free) == 1)
-		return -ENOMEM;
+	if (atomic_read(&ptr_virt_m_cfg->num_desc_free) == 1) {
+		rc = -ENOMEM;
+		goto done;
+	}
 
 	spin_lock_irqsave(&ptr_virt_m_cfg->lock, iflags);
 
@@ -1274,7 +1294,10 @@ int axxia_add_ibds_buffer(
 
 	spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, iflags);
 
-	return 0;
+done:
+	spin_unlock_irqrestore(&priv->api_lock, lflags);
+
+	return rc;
 }
 EXPORT_SYMBOL(axxia_add_ibds_buffer);
 
@@ -1487,12 +1510,14 @@ void *axxia_get_ibds_data(
 	struct axxia_rio_ids_data_desc *ptr_data_desc;
 	u32    m_id, data_read_ptr;
 	int    found_one = RIO_DS_FALSE;
-	void  *user_buf;
+	void  *user_buf = NULL;
 	u32    pdu_length;
-	unsigned long iflags;
+	unsigned long lflags, iflags;
 	u32    vsid;
 	u16    virt_vsid;
 	u32    alias_reg;
+
+	spin_lock_irqsave(&priv->api_lock, lflags);
 
 	/* Find the mapping between incoming VSID and internal VSID */
 	__rio_local_read_config_32(mport, RAB_IBDS_VSID_ALIAS, &alias_reg);
@@ -1516,11 +1541,11 @@ void *axxia_get_ibds_data(
 	}
 
 	if (found_one == RIO_DS_FALSE)
-		return NULL;
+		goto done;
 
 	/* Check if there are buffers that are written - semaphore ?*/
 	if (atomic_read(&ptr_virt_m_cfg->num_hw_written_bufs) < 1)
-		return NULL;
+		goto done;
 
 	spin_lock_irqsave(&ptr_virt_m_cfg->lock, iflags);
 
@@ -1532,17 +1557,13 @@ void *axxia_get_ibds_data(
 
 	/* Check if the source_id and cos matches */
 	if ((((ptr_data_desc->dw0 >> 16) & 0xFFFF) != source_id) ||
-		((ptr_data_desc->dw2 & 0xFF0000) >> 16) != cos) {
-		spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, iflags);
-		return NULL;
-	}
+		((ptr_data_desc->dw2 & 0xFF0000) >> 16) != cos)
+		goto done2;
 
 	user_buf = ptr_data_desc->virt_data_buf;
 
 	if (user_buf == NULL) {
 		*ptr_pdu_length = 0;
-		spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, iflags);
-		return NULL;
 	} else {
 		pdu_length = ((ptr_data_desc->dw1 & 0xFFFF0000) >> 16);
 
@@ -1564,11 +1585,14 @@ void *axxia_get_ibds_data(
 		atomic_inc(&ptr_virt_m_cfg->num_desc_free);
 
 		ptr_data_desc->buf_status = DS_DBUF_FREED;
-
-		spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, iflags);
-
-		return user_buf;
 	}
+
+done2:
+	spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, iflags);
+
+done:
+	spin_unlock_irqrestore(&priv->api_lock, lflags);
+	return user_buf;
 }
 EXPORT_SYMBOL(axxia_get_ibds_data);
 
@@ -1594,8 +1618,8 @@ int axxia_close_ib_data_stream(
 	struct axxia_ibds_virt_m_cfg  *ptr_virt_m_cfg;
 	struct axxia_rio_ids_data_desc *ptr_data_desc;
 	unsigned long lflags;
-	u8      find_ava_virt_m = RIO_DS_FALSE;
-	u8      i;
+	int     find_ava_virt_m = RIO_DS_FALSE;
+	int     i;
 	u8      virt_vsid;
 
 	spin_lock_irqsave(&priv->api_lock, lflags);
@@ -1791,9 +1815,9 @@ int axxia_cfg_ds(
 	struct rio_priv               *priv = mport->priv;
 	struct axxia_rio_ds_priv      *ptr_ds_priv = &(priv->ds_priv_data);
 	struct axxia_rio_ds_cfg       *ptr_ds_cfg  = &(priv->ds_cfg_data);
-	u8     dse_id;
+	int    dse_id;
+	int    ds_capable;
 	u32    reg_val;
-	u8     ds_capable;
 
 	/*
 	** Check if the ASIC supports data streaming feature.
