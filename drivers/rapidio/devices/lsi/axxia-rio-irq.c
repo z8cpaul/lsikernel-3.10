@@ -1691,8 +1691,6 @@ static void ib_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 	u32 dme_mask = state;
 	unsigned long iflags;
 
-	spin_lock_irqsave(&mb->lock, iflags);
-
 	/**
 	 * Inbound mbox has 4 engines, 1 per letter.
 	 * For each message engine that contributes to IRQ state,
@@ -1710,12 +1708,12 @@ static void ib_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 		while (mb->me[letter]->dme_no != dme_no)
 			letter--;
 
-		if (letter < 0) {
-			spin_unlock_irqrestore(&mb->lock, iflags);
+		if (letter < 0)
 			return;
-		}
 
 		me = mb->me[letter];
+
+		spin_lock_irqsave(&me->lock, iflags);
 
 		/**
 		 * Get and clear latched state
@@ -1841,9 +1839,9 @@ static void ib_dme_irq_handler(struct rio_irq_handler *h, u32 state)
 				 RAB_IB_DME_CTRL(dme_no), dme_ctrl);
 		}
 #endif /* OBSOLETE_BZ47185 */
-	}
 
-	spin_unlock_irqrestore(&mb->lock, iflags);
+		spin_unlock_irqrestore(&me->lock, iflags);
+	}
 }
 
 /**
@@ -2585,6 +2583,9 @@ int axxia_add_inb_buffer(struct rio_mport *mport, int mbox, void *buf)
 	if ((mbox < 0) || (mbox >= RIO_MAX_RX_MBOX))
 		return -EINVAL;
 
+	if (!test_bit(RIO_IRQ_ENABLED, &priv->ib_dme_irq[mbox]->state))
+		return -EINVAL;
+
 	mb = mbox_get(priv->ib_dme_irq[mbox].data);
 	if (!mb)
 		return -EINVAL;
@@ -2632,6 +2633,8 @@ void *axxia_get_inb_message(struct rio_mport *mport, int mbox, int letter,
 		return ERR_PTR(-EINVAL);
 	if ((letter < 0) || (letter >= RIO_MSG_MAX_LETTER))
 		return ERR_PTR(-EINVAL);
+	if (!test_bit(RIO_IRQ_ENABLED, &priv->ib_dme_irq[mbox]->state))
+		return -ERR_PTR(EINVAL);
 
 	mb = mbox_get(priv->ib_dme_irq[mbox].data);
 	if (!mb)
@@ -2641,7 +2644,7 @@ void *axxia_get_inb_message(struct rio_mport *mport, int mbox, int letter,
 	if (!me)
 		return ERR_PTR(-EINVAL);
 
-	spin_lock_irqsave(&mb->lock, iflags);
+	spin_lock_irqsave(&me->lock, iflags);
 
 #ifdef OBSOLETE_BZ47185
 	/* Make this conditional for AXM55xx??? */
@@ -2788,7 +2791,7 @@ done:
 					 dw0);
 	}
 
-	spin_unlock_irqrestore(&mb->lock, iflags);
+	spin_unlock_irqrestore(&me->lock, iflags);
 	dme_put(me);
 	mbox_put(mb);
 	return buf;

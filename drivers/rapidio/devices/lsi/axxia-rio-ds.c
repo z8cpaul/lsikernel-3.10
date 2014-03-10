@@ -468,9 +468,7 @@ int axxia_add_ob_data_stream(
 	u32	next_desc_high, data_buf_high;
 	unsigned long	next_desc_ptr_phy, data_buf_phy;
 	int     rc = 0;
-	unsigned long lflags, iflags;
-
-	spin_lock_irqsave(&priv->api_lock, lflags);
+	unsigned long iflags;
 
 	/* Sanity check - TBD */
 	ptr_ds_priv = &(priv->ds_priv_data);
@@ -631,7 +629,6 @@ int axxia_add_ob_data_stream(
 
 done:
 	spin_unlock_irqrestore(&ptr_dse_cfg->lock, iflags);
-	spin_unlock_irqrestore(&priv->api_lock, lflags);
 	return rc;
 }
 EXPORT_SYMBOL(axxia_add_ob_data_stream);
@@ -782,12 +779,11 @@ int axxia_close_ob_data_stream(
 	unsigned long lflags;
 	u32    dse_ctrl, i;
 
-	spin_lock_irqsave(&priv->api_lock, lflags);
-
 	ptr_dse_cfg = &(ptr_ds_cfg->obds_dse_cfg[dse_id]);
+	spin_lock_irqsave(&ptr_dse_cfg->lock, lflags);
 
 	if (ptr_dse_cfg->in_use == RIO_DS_FALSE) {
-		spin_unlock_irqrestore(&priv->api_lock, lflags);
+		spin_unlock_irqrestore(&ptr_dse_cfg->lock, lflags);
 		return 0;
 	}
 
@@ -826,7 +822,7 @@ int axxia_close_ob_data_stream(
 	/* release the IRQ handler */
 	release_irq_handler(&(ptr_ds_priv->ob_dse_irq[dse_id]));
 
-	spin_unlock_irqrestore(&priv->api_lock, lflags);
+	spin_unlock_irqrestore(&ptr_dse_cfg->lock, lflags);
 
 	return 0;
 }
@@ -1125,6 +1121,7 @@ int axxia_open_ib_data_stream(
 				 cos,
 				 desc_dbuf_size,
 				 num_entries);
+
 	spin_unlock_irqrestore(&priv->api_lock, lflags);
 
 	return rc;
@@ -1171,12 +1168,10 @@ int axxia_add_ibds_buffer(
 	unsigned long data_addr_phy;
 	u32    data_addr_hi;
 
-	unsigned long lflags, iflags;
+	unsigned long iflags;
 
 	if (buf == NULL)
 		return -EINVAL;
-
-	spin_lock_irqsave(&priv->api_lock, lflags);
 
 	/* Search through the virtual M table to find the one that has
 	**  the same source_id and cos. */
@@ -1192,12 +1187,15 @@ int axxia_add_ibds_buffer(
 
 	for (m_id = 0; m_id < RIO_MAX_NUM_IBDS_VSID_M; m_id++) {
 		ptr_virt_m_cfg = &(ptr_ds_cfg->ibds_vsid_m_cfg[m_id]);
+		spin_lock_irqsave(&ptr_virt_m_cfg->lock, iflags);
 
 		if ((ptr_virt_m_cfg->virt_vsid == virt_vsid)    &&
 		    (ptr_virt_m_cfg->in_use == RIO_DS_TRUE)) {
 			found_one = RIO_DS_TRUE;
 			break;
 		}
+
+		spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, iflags);
 	}
 
 	if (found_one == RIO_DS_FALSE) {
@@ -1228,8 +1226,6 @@ int axxia_add_ibds_buffer(
 		rc = -ENOMEM;
 		goto done;
 	}
-
-	spin_lock_irqsave(&ptr_virt_m_cfg->lock, iflags);
 
 	/* Put user's buffer into the corresponding descriptors */
 	ptr_data_desc =
@@ -1292,11 +1288,8 @@ int axxia_add_ibds_buffer(
 
 	atomic_dec(&ptr_virt_m_cfg->num_desc_free);
 
-	spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, iflags);
-
 done:
-	spin_unlock_irqrestore(&priv->api_lock, lflags);
-
+	spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, iflags);
 	return rc;
 }
 EXPORT_SYMBOL(axxia_add_ibds_buffer);
@@ -1512,12 +1505,10 @@ void *axxia_get_ibds_data(
 	int    found_one = RIO_DS_FALSE;
 	void  *user_buf = NULL;
 	u32    pdu_length;
-	unsigned long lflags, iflags;
+	unsigned long iflags;
 	u32    vsid;
 	u16    virt_vsid;
 	u32    alias_reg;
-
-	spin_lock_irqsave(&priv->api_lock, lflags);
 
 	/* Find the mapping between incoming VSID and internal VSID */
 	__rio_local_read_config_32(mport, RAB_IBDS_VSID_ALIAS, &alias_reg);
@@ -1532,12 +1523,15 @@ void *axxia_get_ibds_data(
 	** has the same source_id and cos */
 	for (m_id = 0; m_id < RIO_MAX_NUM_IBDS_VSID_M; m_id++) {
 		ptr_virt_m_cfg = &(ptr_ds_cfg->ibds_vsid_m_cfg[m_id]);
+		spin_lock_irqsave(&ptr_virt_m_cfg->lock, iflags);
 
 		if ((ptr_virt_m_cfg->virt_vsid == virt_vsid)    &&
 		    (ptr_virt_m_cfg->in_use == RIO_DS_TRUE)) {
 			found_one = RIO_DS_TRUE;
 			break;
 		}
+
+		spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, iflags);
 	}
 
 	if (found_one == RIO_DS_FALSE)
@@ -1546,8 +1540,6 @@ void *axxia_get_ibds_data(
 	/* Check if there are buffers that are written - semaphore ?*/
 	if (atomic_read(&ptr_virt_m_cfg->num_hw_written_bufs) < 1)
 		goto done;
-
-	spin_lock_irqsave(&ptr_virt_m_cfg->lock, iflags);
 
 	data_read_ptr = ptr_virt_m_cfg->data_read_ptr;
 
@@ -1558,7 +1550,7 @@ void *axxia_get_ibds_data(
 	/* Check if the source_id and cos matches */
 	if ((((ptr_data_desc->dw0 >> 16) & 0xFFFF) != source_id) ||
 		((ptr_data_desc->dw2 & 0xFF0000) >> 16) != cos)
-		goto done2;
+		goto done;
 
 	user_buf = ptr_data_desc->virt_data_buf;
 
@@ -1587,11 +1579,9 @@ void *axxia_get_ibds_data(
 		ptr_data_desc->buf_status = DS_DBUF_FREED;
 	}
 
-done2:
+done:
 	spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, iflags);
 
-done:
-	spin_unlock_irqrestore(&priv->api_lock, lflags);
 	return user_buf;
 }
 EXPORT_SYMBOL(axxia_get_ibds_data);
@@ -1622,10 +1612,9 @@ int axxia_close_ib_data_stream(
 	int     i;
 	u8      virt_vsid;
 
-	spin_lock_irqsave(&priv->api_lock, lflags);
-
 	for (i = 0; i < (ptr_ds_cfg->num_ibds_virtual_m); i++) {
 		ptr_virt_m_cfg = &(ptr_ds_cfg->ibds_vsid_m_cfg[i]);
+		spin_lock_irqsave(&ptr_virt_m_cfg->lock, lflags);
 
 		if ((ptr_virt_m_cfg->in_use == RIO_DS_TRUE)     &&
 		    (ptr_virt_m_cfg->source_id == source_id)    &&
@@ -1634,12 +1623,12 @@ int axxia_close_ib_data_stream(
 			virt_vsid = i;
 			break;
 		}
+
+		spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, lflags);
 	}
 
-	if (find_ava_virt_m == RIO_DS_FALSE) {
-		spin_unlock_irqrestore(&priv->api_lock, lflags);
+	if (find_ava_virt_m == RIO_DS_FALSE)
 		return 0;
-	}
 
 	/* reset variables */
 	ptr_virt_m_cfg->in_use = RIO_DS_FALSE;
@@ -1667,7 +1656,7 @@ int axxia_close_ib_data_stream(
 	if (ptr_virt_m_cfg->ptr_ibds_data_desc != NULL)
 		kfree(ptr_virt_m_cfg->ptr_ibds_data_desc);
 
-	spin_unlock_irqrestore(&priv->api_lock, lflags);
+	spin_unlock_irqrestore(&ptr_virt_m_cfg->lock, lflags);
 
 	return 0;
 }
