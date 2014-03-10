@@ -2583,7 +2583,7 @@ int axxia_add_inb_buffer(struct rio_mport *mport, int mbox, void *buf)
 	if ((mbox < 0) || (mbox >= RIO_MAX_RX_MBOX))
 		return -EINVAL;
 
-	if (!test_bit(RIO_IRQ_ENABLED, &priv->ib_dme_irq[mbox]->state))
+	if (!test_bit(RIO_IRQ_ENABLED, &priv->ib_dme_irq[mbox].state))
 		return -EINVAL;
 
 	mb = mbox_get(priv->ib_dme_irq[mbox].data);
@@ -2633,8 +2633,8 @@ void *axxia_get_inb_message(struct rio_mport *mport, int mbox, int letter,
 		return ERR_PTR(-EINVAL);
 	if ((letter < 0) || (letter >= RIO_MSG_MAX_LETTER))
 		return ERR_PTR(-EINVAL);
-	if (!test_bit(RIO_IRQ_ENABLED, &priv->ib_dme_irq[mbox]->state))
-		return -ERR_PTR(EINVAL);
+	if (!test_bit(RIO_IRQ_ENABLED, &priv->ib_dme_irq[mbox].state))
+		return ERR_PTR(-EINVAL);
 
 	mb = mbox_get(priv->ib_dme_irq[mbox].data);
 	if (!mb)
