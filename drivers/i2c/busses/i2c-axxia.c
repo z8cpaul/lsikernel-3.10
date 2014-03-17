@@ -23,7 +23,6 @@
 #include <linux/slab.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
-#include <linux/of_i2c.h>
 #include <linux/module.h>
 
 #define SCL_WAIT_TIMEOUT_NS 25000000
@@ -572,8 +571,6 @@ axxia_i2c_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, idev);
-
-	of_i2c_register_devices(&idev->adapter);
 
 	return 0;
 }

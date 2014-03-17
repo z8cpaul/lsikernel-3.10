@@ -19,7 +19,6 @@
 #include <linux/sched.h>
 #include <linux/init.h>
 #include <linux/of_platform.h>
-#include <linux/of_i2c.h>
 #include <linux/slab.h>
 
 #include <linux/io.h>
@@ -463,8 +462,6 @@ static int acp34xx_i2c_probe(struct platform_device *dev)
 	}
 
 	pr_info("%s: adapter has been added\n", np->full_name);
-
-	of_i2c_register_devices(&i2c->adap);
 
 	dev_set_drvdata(&dev->dev, i2c);
 	return 0;
