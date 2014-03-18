@@ -358,7 +358,7 @@ static int pl061_probe(struct device *dev,
 	irq_set_chained_handler(irq, pl061_irq_handler);
 	irq_set_handler_data(irq, chip);
 
-	chip->domain = irq_domain_add_simple(adev->dev.of_node, PL061_GPIO_NR,
+	chip->domain = irq_domain_add_simple(dev->of_node, PL061_GPIO_NR,
 					     irq_base, &pl061_domain_ops, chip);
 	if (!chip->domain)
 		return -ENODEV;
