@@ -80,15 +80,7 @@ void __cpuinit axxia_secondary_init(unsigned int cpu)
 	/* Fixup for cross-cluster SEV */
 	do_fixup_sev();
 
-	/*
-	 * If this isn't the first physical core in a secondary cluster
-	 * then run the standard GIC secondary init routine. Otherwise,
-	 * run the Axxia secondary cluster init routine.
-	 */
-	if (cpu_logical_map(cpu) % 4)
-		axxia_gic_secondary_init();
-	else
-		axxia_gic_secondary_cluster_init();
+	axxia_gic_secondary_init();
 
 	/*
 	 * Let the primary processor know we're out of the
