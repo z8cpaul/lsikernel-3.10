@@ -165,7 +165,7 @@ static void smp_acpx14xx_machine_kexec(struct kimage *image)
 	}
 
 	if (!timeout)
-		printk(KERN_ERR "Unable to bring down secondary cpu(s)");
+		pr_err("Unable to bring down secondary cpu(s)");
 
 	for_each_online_cpu(i) {
 		if (i == smp_processor_id())
@@ -253,7 +253,8 @@ static int __init acpx14xx_probe(void)
 {
 	unsigned long root = of_get_flat_dt_root();
 
-	if (!of_flat_dt_is_compatible(root, "lsi,acp"))
+	if (!of_flat_dt_is_compatible(root, "lsi,acp") &&
+	    !of_flat_dt_is_compatible(root, "ibm,acpx1-4xx"))
 		return 0;
 
 	return 1;
