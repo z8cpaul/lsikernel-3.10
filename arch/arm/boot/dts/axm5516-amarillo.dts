@@ -158,6 +158,14 @@
 	};
 };
 
+&i2c0 {
+	status = "okay";
+
+	sysfpga@40 {
+		reg = <0x40>;
+	};
+};
+
 &i2c1 {
 	status = "okay";
 
