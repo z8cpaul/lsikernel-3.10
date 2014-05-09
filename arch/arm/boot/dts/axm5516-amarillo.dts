@@ -175,7 +175,7 @@
 	};
 
 	adt7467@2e {
-		compatible = "atd7473";
+		compatible = "adt7473";
 		reg = <0x2e>;
 	};
 
