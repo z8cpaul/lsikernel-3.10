@@ -223,6 +223,9 @@ axxia_i2c_init(struct axxia_i2c_dev *idev)
 	/* Timeout in divided clocks */
 	writel((1<<15) | tmo_clk, &idev->regs->wait_timer_control);
 
+	/* Mask all master interrupt bits */
+	i2c_int_disable(idev, ~0);
+
 	/* Interrupt enable */
 	writel(0x01, &idev->regs->interrupt_enable);
 
