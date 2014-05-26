@@ -113,7 +113,7 @@ struct axxia_i2c_dev {
 	struct i2c_adapter adapter;
 	/* clock reference for i2c input clock */
 	struct clk *i2c_clk;
-	/* pointer to register struct */
+	/* pointer to registers */
 	struct i2c_regs __iomem *regs;
 	/* xfer completion object */
 	struct completion msg_complete;
@@ -363,7 +363,7 @@ axxia_i2c_isr(int irq, void *_dev)
 		idev->msg_err = status & MST_STATUS_ERR;
 		i2c_int_disable(idev, ~0);
 		dev_dbg(idev->dev, "error %s, rx=%u/%u tx=%u/%u\n",
-			status_str(idev->msg_err),
+			status_str(status),
 			readl(&idev->regs->mst_rx_bytes_xfrd),
 			readl(&idev->regs->mst_rx_xfer),
 			readl(&idev->regs->mst_tx_bytes_xfrd),
@@ -439,7 +439,7 @@ axxia_i2c_xfer_msg(struct axxia_i2c_dev *idev, struct i2c_msg *msg)
 	i2c_int_enable(idev, int_mask);
 
 	ret = wait_for_completion_timeout(&idev->msg_complete,
-			I2C_XFER_TIMEOUT);
+					  I2C_XFER_TIMEOUT);
 
 	i2c_int_disable(idev, int_mask);
 
@@ -471,7 +471,7 @@ axxia_i2c_stop(struct axxia_i2c_dev *idev)
 	writel(0xb, &idev->regs->mst_command);
 	i2c_int_enable(idev, int_mask);
 	ret = wait_for_completion_timeout(&idev->msg_complete,
-			I2C_STOP_TIMEOUT);
+					  I2C_STOP_TIMEOUT);
 	i2c_int_disable(idev, int_mask);
 	if (ret == 0)
 		return -ETIMEDOUT;
@@ -500,9 +500,9 @@ static u32
 axxia_i2c_func(struct i2c_adapter *adap)
 {
 	u32 caps = (I2C_FUNC_I2C |
-		I2C_FUNC_10BIT_ADDR |
-		I2C_FUNC_SMBUS_EMUL |
-		I2C_FUNC_SMBUS_BLOCK_DATA);
+		    I2C_FUNC_10BIT_ADDR |
+		    I2C_FUNC_SMBUS_EMUL |
+		    I2C_FUNC_SMBUS_BLOCK_DATA);
 	return caps;
 }
 
