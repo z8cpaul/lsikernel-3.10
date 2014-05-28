@@ -201,8 +201,8 @@ smmon_probe(struct platform_device *pdev)
 {
 	struct sm_dev *sm;
 	struct resource *io;
-	struct resource *irq;
-	u32 mask = SM_INT_MASK;
+	int irq;
+	u32 mask;
 	int rc = 0;
 
 	sm = devm_kzalloc(&pdev->dev, sizeof(*sm), GFP_KERNEL);
@@ -219,19 +219,20 @@ smmon_probe(struct platform_device *pdev)
 	}
 	sm->region = io->start;
 
-	irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
-	if (!irq) {
-		rc = -EINVAL;
+	/* Disable all memory controller interrupts */
+	mask = 0xffffffff;
+	ncr_write(sm->region, 0x414, 4, &mask);
+
+	irq = platform_get_irq(pdev, 0);
+	if (irq < 0) {
+		rc = irq;
 		goto out;
 	}
 
-	rc = devm_request_irq(&pdev->dev, irq->start, smmon_isr,
-			      IRQF_ONESHOT, dev_name(&pdev->dev), pdev);
+	rc = devm_request_irq(&pdev->dev, irq, smmon_isr,
+			      IRQF_ONESHOT, dev_name(&pdev->dev), sm);
 	if (rc)
 		goto out;
-
-	/* Enable memory controller interrupts */
-	ncr_write(sm->region, 0x414, 4, &mask);
 
 	rc = sysfs_create_group(&pdev->dev.kobj, &smmon_attr_group);
 	if (rc)
@@ -239,6 +240,16 @@ smmon_probe(struct platform_device *pdev)
 
 	dev_set_drvdata(&pdev->dev, sm);
 	pr_info("%s: Memory controller monitor\n", dev_name(&pdev->dev));
+
+	/* Enable memory controller interrupts. We need to disable the
+	 * interrupt while unmasking it, since otherwise there will be a
+	 * locking conflict in ncr_write/ncr_read when the ISR tries to read
+	 * interrupt status.
+	 */
+	disable_irq(irq);
+	mask = SM_INT_MASK;
+	ncr_write(sm->region, 0x414, 4, &mask);
+	enable_irq(irq);
 out:
 	return rc;
 }
