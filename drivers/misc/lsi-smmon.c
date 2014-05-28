@@ -24,6 +24,10 @@ static int log = 1;
 module_param(log, int, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(log, "Log each error to kernel log.");
 
+static int panic_on_fatal = 1;
+module_param(panic_on_fatal, int, S_IRUGO|S_IWUSR);
+MODULE_PARM_DESC(panic_on_fatal, "Panic on fatal error.");
+
 /*
   AXM55xx memory controller interrupt status bits:
 
@@ -96,18 +100,19 @@ static const u32 event_mask[NR_EVENTS] = {
 };
 
 static const struct event_logging {
+	int         fatal;
 	const char *level;
 	const char *name;
 } event_logging[NR_EVENTS] = {
-	[EV_ILLEGAL]         = {KERN_ERR, "Illegal access"},
-	[EV_MULT_ILLEGAL]    = {KERN_ERR, "Illegal access"},
-	[EV_CORR_ECC]        = {KERN_NOTICE, "Correctable ECC error"},
-	[EV_MULT_CORR_ECC]   = {KERN_NOTICE, "Correctable ECC error"},
-	[EV_UNCORR_ECC]      = {KERN_CRIT, "Uncorrectable ECC error"},
-	[EV_MULT_UNCORR_ECC] = {KERN_CRIT, "Uncorrectable ECC error"},
-	[EV_PORT_ERROR]      = {KERN_CRIT, "Port error"},
-	[EV_WRAP_ERROR]      = {KERN_CRIT, "Wrap error"},
-	[EV_PARITY_ERROR]    = {KERN_CRIT, "Parity error"},
+	[EV_ILLEGAL]         = {0, KERN_ERR, "Illegal access"},
+	[EV_MULT_ILLEGAL]    = {0, KERN_ERR, "Illegal access"},
+	[EV_CORR_ECC]        = {0, KERN_NOTICE, "Correctable ECC error"},
+	[EV_MULT_CORR_ECC]   = {0, KERN_NOTICE, "Correctable ECC error"},
+	[EV_UNCORR_ECC]      = {1, KERN_CRIT, "Uncorrectable ECC error"},
+	[EV_MULT_UNCORR_ECC] = {1, KERN_CRIT, "Uncorrectable ECC error"},
+	[EV_PORT_ERROR]      = {0, KERN_CRIT, "Port error"},
+	[EV_WRAP_ERROR]      = {0, KERN_CRIT, "Wrap error"},
+	[EV_PARITY_ERROR]    = {0, KERN_CRIT, "Parity error"},
 };
 
 struct smmon_attr {
@@ -182,6 +187,10 @@ smmon_isr(int interrupt, void *device)
 	for (i = 0; i < NR_EVENTS; ++i) {
 		if ((status & event_mask[i]) != 0) {
 			++sm->counter[i];
+			if (panic_on_fatal && event_logging[i].fatal)
+				panic("%s (%s)\n",
+				      event_logging[i].name,
+				      dev_name(&sm->pdev->dev));
 			if (log)
 				printk_ratelimited("%s%s: %s\n",
 						   event_logging[i].level,
