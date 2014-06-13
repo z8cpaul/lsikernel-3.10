@@ -42,12 +42,6 @@
 		};
 	};
 
-	virtio_block@0130000 {
-        	compatible = "virtio,mmio";
-                reg = <0x20 0x101f0000 0 0x10000>;
-                interrupts = <0 255 4>;
-	};
-
 	sim {
 		compatible = "arm,amba-bus", "simple-bus";
 		device_type = "soc";
@@ -55,6 +49,12 @@
 		#size-cells = <2>;
 		interrupt-parent = <&gic>;
 		ranges;
+
+		virtio_block@0130000 {
+        		compatible = "virtio,mmio";
+                	reg = <0x20 0x101f0000 0 0x10000>;
+                	interrupts = <0 223 4>;
+		};
 
 		mmci@020101E0000 {
 			compatible = "arm,pl180", "arm,primecell";
