@@ -23,6 +23,7 @@
 #include <asm/virt.h>
 
 #include "axxia.h"
+#include "lsi_power_management.h"
 #include <mach/axxia-gic.h>
 
 extern void axxia_secondary_startup(void);
@@ -89,6 +90,7 @@ static DEFINE_RAW_SPINLOCK(boot_lock);
 
 void __cpuinit axxia_secondary_init(unsigned int cpu)
 {
+
 	/* Fixup for cross-cluster SEV */
 	do_fixup_sev();
 
@@ -111,6 +113,9 @@ int __cpuinit axxia_boot_secondary(unsigned int cpu, struct task_struct *idle)
 {
 	unsigned long timeout;
 	int phys_cpu, cluster;
+	unsigned long powered_down_cpu;
+	int rVal = 0;
+	int pow = 0;
 
 	/*
 	 * Set synchronisation state between this boot processor
@@ -137,6 +142,19 @@ int __cpuinit axxia_boot_secondary(unsigned int cpu, struct task_struct *idle)
 	 *         | CLUSTER | Reserved  |CPU
 	 */
 	phys_cpu = cpu_logical_map(cpu);
+
+	powered_down_cpu = pm_get_powered_down_cpu();
+	if (powered_down_cpu & (1 << phys_cpu))
+	{
+		pr_err("CPU %d is down and needs power\n", phys_cpu);
+		rVal = pm_cpu_powerup(phys_cpu);
+		if (rVal)
+			return (rVal);
+		else
+			pow = 1;
+	}
+
+
 	cluster = (phys_cpu / 4) << 8;
 	phys_cpu = cluster + (phys_cpu % 4);
 
@@ -144,7 +162,8 @@ int __cpuinit axxia_boot_secondary(unsigned int cpu, struct task_struct *idle)
 	write_pen_release(phys_cpu);
 
 	/* Send a wakeup IPI to get the idled cpu out of WFI state */
-	arch_send_wakeup_ipi_mask(cpumask_of(cpu));
+	if (!pow)
+		arch_send_wakeup_ipi_mask(cpumask_of(cpu));
 
 	/* Wait for so long, then give up if nothing happens ... */
 	timeout = jiffies + (1 * HZ);
@@ -261,6 +280,7 @@ struct smp_operations axxia_smp_ops __initdata = {
 	.smp_boot_secondary	= axxia_boot_secondary,
 #ifdef CONFIG_HOTPLUG_CPU
 	.cpu_die		= axxia_platform_cpu_die,
+	.cpu_kill		= axxia_platform_cpu_kill,
 #endif
 
 };

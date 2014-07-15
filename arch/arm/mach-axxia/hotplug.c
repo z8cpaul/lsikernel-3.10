@@ -15,6 +15,7 @@
 #include <asm/cacheflush.h>
 #include <asm/smp_plat.h>
 #include <asm/cp15.h>
+#include "lsi_power_management.h"
 
 extern volatile int pen_release;
 
@@ -65,6 +66,8 @@ static inline void cpu_leave_lowpower(void)
 
 static void __ref platform_do_lowpower(unsigned int cpu, int *spurious)
 {
+
+#if 0
 	int phys_cpu, cluster;
 
 	/*
@@ -102,10 +105,13 @@ static void __ref platform_do_lowpower(unsigned int cpu, int *spurious)
 		 */
 		(*spurious)++;
 	}
+#endif
+
 }
 
-int platform_cpu_kill(unsigned int cpu)
+int axxia_platform_cpu_kill(unsigned int cpu)
 {
+	pm_cpu_shutdown(cpu);
 	return 1;
 }
 
@@ -114,24 +120,46 @@ int platform_cpu_kill(unsigned int cpu)
  *
  * Called with IRQs disabled
  */
+#if 0
+void axxia_platform_cpu_die(unsigned int cpu) {
+int spurious = 0;
+
+
+ /* we're ready for shutdown now, so do it */
+
+cpu_enter_lowpower_a15();
+platform_do_lowpower(cpu, &spurious);
+
+
+ /* bring this CPU back into the world of cache
+ * coherency, and then restore interrupts */
+
+cpu_leave_lowpower();
+
+if (spurious)
+pr_warn("CPU%u: %u spurious wakeup calls\n", cpu, spurious);
+}
+#endif
+
 void axxia_platform_cpu_die(unsigned int cpu)
 {
-	int spurious = 0;
 
-	/*
-	 * we're ready for shutdown now, so do it
-	 */
-	cpu_enter_lowpower_a15();
-	platform_do_lowpower(cpu, &spurious);
+	pm_data pm_request;
+	int rVal = 0;
+	bool lastCpu;
 
-	/*
-	 * bring this CPU back into the world of cache
-	 * coherency, and then restore interrupts
-	 */
-	cpu_leave_lowpower();
+	pm_request.cpu = cpu;
+	pm_request.cluster = 0;
 
-	if (spurious)
-		pr_warn("CPU%u: %u spurious wakeup calls\n", cpu, spurious);
+
+	lastCpu = pm_cpu_last_of_cluster(cpu);
+	if (lastCpu)
+		rVal = pm_cpul2_logical_die(&pm_request);
+	else
+		rVal = pm_cpu_logical_die(&pm_request);
+	if (rVal)
+		pr_err("CPU %d failed to die\n", cpu);
+
 }
 
 int platform_cpu_disable(unsigned int cpu)
