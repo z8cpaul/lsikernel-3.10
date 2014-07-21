@@ -8,6 +8,50 @@
 #ifndef LSI_POWER_MANAGEMENT_H_
 #define LSI_POWER_MANAGEMENT_H_
 
+
+#define     NCP_SYSCON_MCG_CSW_CPU                              (0x00000000)
+#define     NCP_SYSCON_MCG_CSW_SYS                              (0x00000004)
+#define     NCP_SYSCON_MCG_DIV_CPU                              (0x00000008)
+#define     NCP_SYSCON_MCG_DIV_SYS                              (0x0000000c)
+#define     NCP_SYSCON_CLKDEBUG                                 (0x00000010)
+#define     NCP_SYSCON_EVENT_ENB                                (0x00000014)
+#define     NCP_SYSCON_CPU_FAST_INT                             (0x00000018)
+#define     NCP_SYSCON_GIC_DISABLE                              (0x0000001c)
+#define     NCP_SYSCON_CP15SDISABLE                             (0x00000020)
+#define     NCP_SYSCON_LRSTDISABLE                              (0x00000024)
+#define     NCP_SYSCON_LDO_CTL                                  (0x00000028)
+#define     NCP_SYSCON_SHWK_QOS                                 (0x0000002c)
+#define     NCP_SYSCON_FUSE_RTO                                 (0x00000030)
+#define     NCP_SYSCON_PFUSE                                    (0x00000034)
+#define     NCP_SYSCON_FUSE_STAT                                (0x00000038)
+#define     NCP_SYSCON_SCRATCH                                  (0x0000003c)
+#define     NCP_SYSCON_MASK_IPI0                                (0x00000040)
+#define     NCP_SYSCON_MASK_IPI1                                (0x00000044)
+#define     NCP_SYSCON_MASK_IPI2                                (0x00000048)
+#define     NCP_SYSCON_MASK_IPI3                                (0x0000004c)
+#define     NCP_SYSCON_MASK_IPI4                                (0x00000050)
+#define     NCP_SYSCON_MASK_IPI5                                (0x00000054)
+#define     NCP_SYSCON_MASK_IPI6                                (0x00000058)
+#define     NCP_SYSCON_MASK_IPI7                                (0x0000005c)
+#define     NCP_SYSCON_MASK_IPI8                                (0x00000060)
+#define     NCP_SYSCON_MASK_IPI9                                (0x00000064)
+#define     NCP_SYSCON_MASK_IPI10                               (0x00000068)
+#define     NCP_SYSCON_MASK_IPI11                               (0x0000006c)
+#define     NCP_SYSCON_MASK_IPI12                               (0x00000070)
+#define     NCP_SYSCON_MASK_IPI13                               (0x00000074)
+#define     NCP_SYSCON_MASK_IPI14                               (0x00000078)
+#define     NCP_SYSCON_MASK_IPI15                               (0x0000007c)
+#define     NCP_SYSCON_MASK_IPI16                               (0x00000080)
+#define     NCP_SYSCON_MASK_IPI17                               (0x00000084)
+#define     NCP_SYSCON_MASK_IPI18                               (0x00000088)
+#define     NCP_SYSCON_SPARE0                                   (0x0000008c)
+#define     NCP_SYSCON_STOP_CLK_CPU                             (0x00000090)
+
+
+#define     NCP_SYSCON_RESET_STATUS                             (0x00000100)
+#define     NCP_SYSCON_RESET_CORE_STATUS                        (0x00000108)
+
+#define     NCP_SYSCON_KEY                                      (0x00001000)
 #define     NCP_SYSCON_RESET_CTL                                (0x00001008)
 #define     NCP_SYSCON_RESET_CPU                                (0x0000100c)
 #define     NCP_SYSCON_HOLD_CPU                                 (0x00001010)
@@ -106,6 +150,9 @@
 #define		PORESET_CLUSTER2		(0x40000)
 #define		PORESET_CLUSTER3		(0x80000)
 
+/* SYSCON KEY Value */
+#define 	VALID_KEY_VALUE			(0xAB)
+
 #define MAX_NUM_CLUSTERS    (4)
 #define CORES_PER_CLUSTER   (4)
 
@@ -126,5 +173,7 @@ int pm_cpul2_logical_die(pm_data *pm_request);
 unsigned long pm_get_powered_down_cpu(void);
 bool pm_cpu_last_of_cluster(u32 cpu);
 void pm_L2_logical_shutdown(void *data);
+void pm_dump_dickens(void);
+void pm_init_cpu(u32 cpu);
 
 #endif /* LSI_POWER_MANAGEMENT_H_ */

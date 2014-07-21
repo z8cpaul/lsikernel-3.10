@@ -23,6 +23,7 @@
 #include <asm/smp_plat.h>
 #include <asm/cp15.h>
 
+#include "axxia.h"
 #include "lsi_power_management.h"
 
 #define SYSCON_PHYS_ADDR 0x002010030000ULL
@@ -46,7 +47,7 @@ PORESET_CLUSTER3 };
 
 static u32 pm_cpu_powered_down;
 
-static u32 got_to;
+u32 got_to;
 
 /*======================= LOCAL FUNCTIONS ==============================*/
 static void pm_set_bits_syscon_register(void __iomem *syscon, u32 reg, u32 data);
@@ -55,13 +56,13 @@ static bool pm_test_for_bit_with_timeout(void __iomem *syscon, u32 reg, u32 bit)
 static bool pm_wait_for_bit_clear_with_timeout(void __iomem *syscon, u32 reg,
 		u32 bit);
 static void pm_dickens_logical_shutdown(u32 cluster);
-static void pm_dickens_logical_powerup(u32 cluster);
+static int pm_dickens_logical_powerup(u32 cluster);
 static int pm_cpu_physical_isolation_and_power_down(int cpu);
 static void pm_L2_isolation_and_power_down(int cluster);
 static void __pm_cpu_shutdown(void *data);
 static int pm_cpu_physical_connection_and_power_up(int cpu);
-static void pm_L2_physical_connection_and_power_up(u32 cluster);
-static void pm_L2_logical_powerup(u32 cluster, u32 cpu);
+static int pm_L2_physical_connection_and_power_up(u32 cluster);
+static int pm_L2_logical_powerup(u32 cluster, u32 cpu);
 
 static bool pm_first_cpu_of_cluster(u32 cpu) {
 	u32 count = 0;
@@ -245,8 +246,9 @@ static bool pm_wait_for_bit_clear_with_timeout(void __iomem *syscon, u32 reg,
 }
 static void pm_dickens_logical_shutdown(u32 cluster) {
 	int i;
-	u32 status;
+	int status;
 	u32 bit;
+	u32 bit_pos;
 	int retries;
 	void __iomem *dickens;
 	got_to = __LINE__;
@@ -258,6 +260,7 @@ static void pm_dickens_logical_shutdown(u32 cluster) {
 	}
 
 	bit = (0x01 << cluster_to_node[cluster]);
+	bit_pos = cluster_to_node[cluster];
 
 	for (i = 0; i < DKN_HNF_TOTAL_NODES; ++i) {
 		writel(bit,
@@ -271,12 +274,12 @@ static void pm_dickens_logical_shutdown(u32 cluster) {
 					dickens + (0x10000 * (DKN_HNF_NODE_ID + i))
 							+ DKN_HNF_SNOOP_DOMAIN_CTL);
 			udelay(1);
-		} while ((0 < --retries) && (CHECK_BIT(status, bit)));
+		} while ((0 < --retries) && CHECK_BIT(status, bit_pos));
 
 		if (0 == retries)
 		{
-			pr_err("DICKENS: Failed to clear the SNOOP main control\n");
-			return;
+			pr_err("DICKENS: Failed to clear the SNOOP main control. LOOP:%d reg: 0x%x\n", i, status);
+			goto dickens_power_down;
 
 		}
 
@@ -292,34 +295,38 @@ static void pm_dickens_logical_shutdown(u32 cluster) {
 				dickens + (0x10000 * DKN_DVM_DOMAIN_OFFSET)
 						+ DKN_MN_DVM_DOMAIN_CTL);
 		udelay(1);
-	} while ((0 < --retries) && (CHECK_BIT(status, bit)));
+	} while ((0 < --retries) && CHECK_BIT(status, bit_pos));
 
 	if (0 == retries)
 	{
-		pr_err("DICKENS: failed to set DOMAIN OFFSET\n");
-		return;
+		pr_err("DICKENS: failed to set DOMAIN OFFSET Reg=0x%x\n", status);
+		goto dickens_power_down;
 
 	}
 
+dickens_power_down:
 	iounmap(dickens);
 
 	return;
 }
 
-static void pm_dickens_logical_powerup(u32 cluster)
+static int pm_dickens_logical_powerup(u32 cluster)
 {
 	int i;
 	u32 status;
 	u32 bit;
+	u32 bit_pos;
 	int retries;
+	int rVal = 0;
 
 	void __iomem *dickens = ioremap(DICKENS_PHYS_ADDR, SZ_4M);
 	if (dickens == NULL) {
 		pr_err("Failed to map dickens registers\n");
-		return;
+		return (-EINVAL);
 	}
 
 	bit = (0x01 << cluster_to_node[cluster]);
+	bit_pos = cluster_to_node[cluster];
 
 	for (i = 0; i < DKN_HNF_TOTAL_NODES; ++i) {
 		writel(bit,
@@ -333,10 +340,14 @@ static void pm_dickens_logical_powerup(u32 cluster)
 					dickens + (0x10000 * (DKN_HNF_NODE_ID + i))
 							+ DKN_HNF_SNOOP_DOMAIN_CTL);
 			udelay(1);
-		} while ((0 < --retries) && (!CHECK_BIT(status, bit)));
+		} while ((0 < --retries) && !CHECK_BIT(status, bit_pos));
 
 		if (0 == retries)
-			BUG();
+		{
+			pr_err("DICKENS: Failed on the SNOOP DONAIN\n");
+			rVal = -EINVAL;
+			goto dickens_power_up;
+		}
 
 	}
 
@@ -351,14 +362,19 @@ static void pm_dickens_logical_powerup(u32 cluster)
 				dickens + (0x10000 * DKN_DVM_DOMAIN_OFFSET)
 						+ DKN_MN_DVM_DOMAIN_CTL);
 		udelay(1);
-	} while ((0 < --retries) && (!CHECK_BIT(status, bit)));
+	} while ((0 < --retries) && !CHECK_BIT(status, bit_pos));
 
 	if (0 == retries)
-		BUG();
+	{
+		pr_err("DICKENS: Failed on the SNOOP DONAIN\n");
+		rVal = -EINVAL;
+		goto dickens_power_up;
+	}
 
+dickens_power_up:
 	iounmap(dickens);
 
-	return;
+	return (rVal);
 }
 
 static void __pm_cpu_shutdown(void *data)
@@ -388,6 +404,7 @@ static void __pm_cpu_shutdown(void *data)
 		if (WARN_ON(!syscon))
 			return;
 
+#if 0
 		pm_clear_bits_syscon_register(syscon, NCP_SYSCON_PWR_CSYSREQ_TS, cluster_mask);
 		success = pm_wait_for_bit_clear_with_timeout(syscon, NCP_SYSCON_PWR_CACTIVE_TS, pm_request->cluster);
 		if (!success) {
@@ -417,7 +434,7 @@ static void __pm_cpu_shutdown(void *data)
 			iounmap(syscon);
 			return;
 		}
-
+#endif
 		pm_clear_bits_syscon_register(syscon, NCP_SYSCON_PWR_CSYSREQ_CNT, cluster_mask);
 		success = pm_wait_for_bit_clear_with_timeout(syscon, NCP_SYSCON_PWR_CACTIVE_CNT, pm_request->cluster);
 		if (!success) {
@@ -457,7 +474,10 @@ static void __pm_cpu_shutdown(void *data)
 		/* Power off the L2 */
 		pm_L2_isolation_and_power_down(pm_request->cluster);
 		if (rVal == 0)
+		{
 			pr_info("CPU %d is powered down with cluster: %d\n", pm_request->cpu, pm_request->cluster);
+			pm_cpu_powered_down |= (1 << pm_request->cpu);
+		}
 		else
 			pr_err("CPU %d failed to power down\n", pm_request->cpu);
 
@@ -475,6 +495,47 @@ static void __pm_cpu_shutdown(void *data)
 	}
 
 	return;
+}
+
+void pm_cpu_secondary_init(void *data)
+{
+	//pm_data *pm_request = (pm_data *)data;
+
+	pr_err("CHARLIE: %s-%d\n", __FILE__,__LINE__);
+	secondary_start_kernel();
+
+#if 0
+	if (axxia_smp_ops.smp_secondary_init)
+		axxia_smp_ops.smp_secondary_init(pm_request->cpu);
+#endif
+}
+
+
+void pm_init_cpu(u32 cpu)
+{
+	pm_data pm_request;
+
+	pr_err("CHARLIE: %s-%d\n", __FILE__,__LINE__);
+
+	pm_request.cpu = cpu;
+	pm_request.cluster = 0;
+
+	smp_call_function_single(pm_request.cpu, pm_cpu_secondary_init, (void *)&pm_request, 1);
+	pr_err("CHARLIE: %s-%d\n", __FILE__,__LINE__);
+
+#if 0
+	syscon = ioremap(SYSCON_PHYS_ADDR, SZ_64K);
+	if (WARN_ON(!syscon))
+		return;
+	/*
+	 * The key value must be written before the CPU RST can be written.
+	 */
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_KEY, VALID_KEY_VALUE);
+	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_HOLD_CPU, (1 << cpu));
+
+	iounmap(syscon);
+#endif
+
 }
 
 int pm_cpu_logical_die(pm_data *pm_request)
@@ -571,8 +632,9 @@ int pm_cpu_powerup(u32 cpu) {
 	void __iomem *syscon = NULL;
 	u32 cpu_mask = (0x01 << cpu);
 
-	u32 pcpu = cpu_logical_map(smp_processor_id());
-	u32 cluster = pcpu / CORES_PER_CLUSTER;
+	u32 reqCpu = cpu_logical_map(cpu);
+	u32 cluster = reqCpu / CORES_PER_CLUSTER;
+	got_to = 0;
 
 	/*
 	 * Is this the first cpu of a cluster to come back on?
@@ -581,7 +643,14 @@ int pm_cpu_powerup(u32 cpu) {
 	first_cpu = pm_first_cpu_of_cluster(cpu);
 	if (first_cpu) {
 
-		pm_L2_logical_powerup(cpu, cluster);
+		pr_err("%s-%d\n", __FILE__, __LINE__);
+		rVal = pm_L2_logical_powerup(cluster, cpu);
+		if (rVal)
+		{
+			pr_err("CPU: Failed the logical L2 power up\n");
+			return (rVal);
+		}
+
 
 	} else {
 
@@ -591,31 +660,50 @@ int pm_cpu_powerup(u32 cpu) {
 		if (WARN_ON(!syscon))
 			return(-EINVAL);
 
+		/*
+		 * The key value has to be written before the CPU RST can be written.
+		 */
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_KEY, VALID_KEY_VALUE);
 		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWRUP_CPU_RST, cpu_mask);
+
 		iounmap(syscon);
 
-		rVal = pm_cpu_physical_connection_and_power_up(cpu);
-		if (rVal)
-		{
-			pr_err("Failed to power up physical connection of cpu: %d\n", cpu);
-			goto pm_power_up;
-		}
-
-		udelay(16);
-
-		/* Clear the CPU from reset and let it go */
-		syscon = ioremap(SYSCON_PHYS_ADDR, SZ_64K);
-		if (WARN_ON(!syscon))
-			return(-EINVAL);
-
-		pm_clear_bits_syscon_register(syscon, NCP_SYSCON_PWRUP_CPU_RST,	cpu_mask);
-
-		/*
-		 * Clear the powered down mask
-		 */
-		pm_cpu_powered_down &= ~(1 << cpu);
-
 	}
+
+	rVal = pm_cpu_physical_connection_and_power_up(cpu);
+	if (rVal)
+	{
+		pr_err("Failed to power up physical connection of cpu: %d\n", cpu);
+		goto pm_power_up;
+	}
+
+	udelay(16);
+
+
+	pm_init_cpu(cpu);
+
+	/* Clear the CPU from reset and let it go */
+	syscon = ioremap(SYSCON_PHYS_ADDR, SZ_64K);
+	if (WARN_ON(!syscon))
+		return(-EINVAL);
+
+	/*
+	 * The key value must be written before the CPU RST can be written.
+	 */
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_KEY, VALID_KEY_VALUE);
+	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_PWRUP_CPU_RST,	cpu_mask);
+
+	/*
+	 * The key value must be written before HOLD CPU can be written.
+	 */
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_KEY, VALID_KEY_VALUE);
+	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_HOLD_CPU, cpu_mask);
+
+	/*
+	 * Clear the powered down mask
+	 */
+	pm_cpu_powered_down &= ~(1 << cpu);
+
 
 pm_power_up:
 	iounmap(syscon);
@@ -740,7 +828,6 @@ static int pm_cpu_physical_connection_and_power_up(int cpu)
 	pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPCPURAM, mask);
 
 	/* Wait until the RAM power up is complete */
-	pr_err("%s-%d\n", __FILE__, __LINE__);
 	success = pm_wait_for_bit_clear_with_timeout(syscon, NCP_SYSCON_PWR_NPWRUPCPURAM_ACK, cpu);
 	if (!success)
 	{
@@ -958,41 +1045,50 @@ static void pm_L2_isolation_and_power_down(int cluster) {
 	iounmap(syscon);
 }
 
-static void pm_L2_physical_connection_and_power_up(u32 cluster) {
+static int pm_L2_physical_connection_and_power_up(u32 cluster) {
 	void __iomem *syscon;
 	bool success;
 	u32 mask = (0x1 << cluster);
+	int rVal = 0;
 
 	syscon = ioremap(SYSCON_PHYS_ADDR, SZ_64K);
 	if (WARN_ON(!syscon))
-		return;
+		return (-EINVAL);
 
 	/* Power up stage 1 */
-	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL2LGCSTG1, mask);
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL2LGCSTG1, mask);
 
 	/* Wait for the stage 1 power up to complete */
-	success = pm_wait_for_bit_clear_with_timeout(syscon,
-			NCP_SYSCON_PWR_NPWRUPL2LGCSTG1_ACK, cluster);
+	success = pm_wait_for_bit_clear_with_timeout(syscon, NCP_SYSCON_PWR_NPWRUPL2LGCSTG1_ACK, cluster);
 	if (!success)
+	{
+		pr_err("CPU: Failed to ack the L2 Stage 1 Power up\n");
+		rVal = -EINVAL;
 		goto power_up_l2_cleanup;
+	}
 
 	/* Power on stage 2 */
-	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL2LGCSTG2, mask);
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL2LGCSTG2, mask);
 
 	/* Set the chip select */
 	pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_CHIPSELECTEN, mask);
 
-	/* Power up the ram */
-	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL2HSRAM, mask);
+	/* Power up the snoop ramram */
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL2HSRAM, mask);
 
 	/* Wait for the stage 1 power up to complete */
-	success = pm_wait_for_bit_clear_with_timeout(syscon,
-			NCP_SYSCON_PWR_NPWRUPL2HSRAM_ACK, cluster);
+	success = pm_wait_for_bit_clear_with_timeout(syscon, NCP_SYSCON_PWR_NPWRUPL2HSRAM_ACK, cluster);
 	if (!success)
+	{
+		pr_err("CPU: failed to get the HSRAM power up ACK\n");
+		rVal = -EINVAL;
 		goto power_up_l2_cleanup;
+	}
 
 	switch (cluster) {
 	case (0):
+
+#ifdef PM_POWER_OFF_ONLY_DATARAM
 		pm_set_bits_syscon_register(syscon,
 				NCP_SYSCON_PWR_PWRUPL20RAM_PWRUPL2RAM1, RAM_BANK0_MASK);
 		udelay(20);
@@ -1007,8 +1103,20 @@ static void pm_L2_physical_connection_and_power_up(u32 cluster) {
 		pm_set_bits_syscon_register(syscon,
 				NCP_SYSCON_PWR_PWRUPL20RAM_PWRUPL2RAM2, RAM_BANK3_MASK);
 		udelay(20);
+#else
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL20RAM_PWRUPL2RAM2, RAM_ALL_MASK);
+		udelay(20);
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL20RAM_PWRUPL2RAM1, RAM_ALL_MASK);
+		udelay(20);
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL20RAM_PWRUPL2RAM0, RAM_ALL_MASK);
+		udelay(20);
+
+#endif
 		break;
 	case (1):
+
+#ifdef PM_POWER_OFF_ONLY_DATARAM
+
 		pm_set_bits_syscon_register(syscon,
 				NCP_SYSCON_PWR_PWRUPL21RAM_PWRUPL2RAM1, RAM_BANK0_MASK);
 		udelay(20);
@@ -1023,24 +1131,46 @@ static void pm_L2_physical_connection_and_power_up(u32 cluster) {
 		pm_set_bits_syscon_register(syscon,
 				NCP_SYSCON_PWR_PWRUPL21RAM_PWRUPL2RAM2, RAM_BANK3_MASK);
 		udelay(20);
+#else
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL21RAM_PWRUPL2RAM2, RAM_ALL_MASK);
+		udelay(20);
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL21RAM_PWRUPL2RAM1, RAM_ALL_MASK);
+		udelay(20);
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL21RAM_PWRUPL2RAM0, RAM_ALL_MASK);
+		udelay(20);
+#endif
 		break;
 	case (2):
+
+#ifdef PM_POWER_OFF_ONLY_DATARAM
+
 		pm_set_bits_syscon_register(syscon,
-				NCP_SYSCON_PWR_PWRUPL21RAM_PWRUPL2RAM1, RAM_BANK0_MASK);
+				NCP_SYSCON_PWR_PWRUPL22RAM_PWRUPL2RAM1, RAM_BANK0_MASK);
 		udelay(20);
 		pm_set_bits_syscon_register(syscon,
-				NCP_SYSCON_PWR_PWRUPL21RAM_PWRUPL2RAM1, RAM_BANK1_LS_MASK);
+				NCP_SYSCON_PWR_PWRUPL22RAM_PWRUPL2RAM1, RAM_BANK1_LS_MASK);
 		pm_set_bits_syscon_register(syscon,
-				NCP_SYSCON_PWR_PWRUPL21RAM_PWRUPL2RAM2, RAM_BANK1_MS_MASK);
+				NCP_SYSCON_PWR_PWRUPL22RAM_PWRUPL2RAM2, RAM_BANK1_MS_MASK);
 		udelay(20);
 		pm_set_bits_syscon_register(syscon,
-				NCP_SYSCON_PWR_PWRUPL21RAM_PWRUPL2RAM2, RAM_BANK2_MASK);
+				NCP_SYSCON_PWR_PWRUPL22RAM_PWRUPL2RAM2, RAM_BANK2_MASK);
 		udelay(20);
 		pm_set_bits_syscon_register(syscon,
-				NCP_SYSCON_PWR_PWRUPL21RAM_PWRUPL2RAM2, RAM_BANK3_MASK);
+				NCP_SYSCON_PWR_PWRUPL22RAM_PWRUPL2RAM2, RAM_BANK3_MASK);
 		udelay(20);
+#else
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL22RAM_PWRUPL2RAM2, RAM_ALL_MASK);
+		udelay(20);
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL22RAM_PWRUPL2RAM1, RAM_ALL_MASK);
+		udelay(20);
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL22RAM_PWRUPL2RAM0, RAM_ALL_MASK);
+		udelay(20);
+#endif
 		break;
 	case (3):
+
+#ifdef PM_POWER_OFF_ONLY_DATARAM
+
 		pm_set_bits_syscon_register(syscon,
 				NCP_SYSCON_PWR_PWRUPL23RAM_PWRUPL2RAM1, RAM_BANK0_MASK);
 		udelay(20);
@@ -1055,57 +1185,82 @@ static void pm_L2_physical_connection_and_power_up(u32 cluster) {
 		pm_set_bits_syscon_register(syscon,
 				NCP_SYSCON_PWR_PWRUPL23RAM_PWRUPL2RAM2, RAM_BANK3_MASK);
 		udelay(20);
+#else
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL23RAM_PWRUPL2RAM2, RAM_ALL_MASK);
+		udelay(20);
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL23RAM_PWRUPL2RAM1, RAM_ALL_MASK);
+		udelay(20);
+		pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_PWRUPL23RAM_PWRUPL2RAM0, RAM_ALL_MASK);
+		udelay(20);
+#endif
 		break;
 	default:
 		pr_err("Illegal cluster: %d > 3\n", cluster);
+		break;
 	}
 
 	/* Clear the chip select */
 	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_PWR_CHIPSELECTEN, mask);
 
 	/* Release the isolation clamps */
-	pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_ISOLATEL2MISC, mask);
+	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_PWR_ISOLATEL2MISC, mask);
 
-	/* Enable the ACE bridge */
-	pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_ACEPWRDNRQ, mask);
-
-	udelay(16);
+	/* Turn the ACE bridge power on*/
+	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_PWR_ACEPWRDNRQ, mask);
 
 power_up_l2_cleanup:
 
 	iounmap(syscon);
+
+	return (rVal);
 }
 
-static void pm_L2_logical_powerup(u32 cluster, u32 cpu) {
+static int pm_L2_logical_powerup(u32 cluster, u32 cpu) {
+
 	void __iomem *syscon;
 	u32 mask = (0x1 << cluster);
 	u32 cpu_mask = (0x1 << cpu);
+	int rVal = 0;
+	u32 reg;
 
 	syscon = ioremap(SYSCON_PHYS_ADDR, SZ_64K);
 	if (WARN_ON(!syscon))
-		return;
+		return (-EINVAL);
 
 	/* put the cluster into a cpu hold */
-	pm_set_bits_syscon_register(syscon, NCP_SYSCON_RESET_AXIS,
-			cluster_to_poreset[cluster]);
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_RESET_AXIS, cluster_to_poreset[cluster]);
+	reg = readl(syscon + NCP_SYSCON_RESET_AXIS);
+	pr_err("SYSCON_RESET: 0x%x\n", reg);
 
-	/* Power put the cpu into reset */
-	pm_set_bits_syscon_register(syscon, NCP_SYSCON_RESET_CPU, cpu_mask);
+	/*
+	 * Write the key so the reset cpu register can be written to.
+	 */
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_KEY, VALID_KEY_VALUE);
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWRUP_CPU_RST, cpu_mask);
 
 	/* Hold the chip debug cluster */
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_KEY, VALID_KEY_VALUE);
 	pm_set_bits_syscon_register(syscon, NCP_SYSCON_HOLD_DBG, mask);
 
 	/* Hold the L2 cluster */
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_KEY, VALID_KEY_VALUE);
 	pm_set_bits_syscon_register(syscon, NCP_SYSCON_HOLD_L2, mask);
 
+	iounmap(syscon);
+
 	/* Cluster physical power up */
-	pm_L2_physical_connection_and_power_up(cluster);
+	rVal = pm_L2_physical_connection_and_power_up(cluster);
 
 	udelay(16);
 
+	syscon = ioremap(SYSCON_PHYS_ADDR, SZ_64K);
+	if (WARN_ON(!syscon))
+		return (-EINVAL);
+
 	/* put the cluster into a cpu hold */
-	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_RESET_AXIS,
-			cluster_to_poreset[cluster]);
+	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_RESET_AXIS, cluster_to_poreset[cluster]);
+	reg = readl(syscon + NCP_SYSCON_RESET_AXIS);
+	pr_err("SYSCON_RESET: 0x%x\n", reg);
 
 	udelay(64);
 
@@ -1113,16 +1268,22 @@ static void pm_L2_logical_powerup(u32 cluster, u32 cpu) {
 	pm_set_bits_syscon_register(syscon, NCP_SYSCON_PWR_CSYSREQ_CNT, mask);
 
 	/* Release the L2 cluster */
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_KEY, VALID_KEY_VALUE);
 	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_HOLD_L2, mask);
 
-	pm_dickens_logical_powerup(cluster);
+	/* Release the chip debug cluster */
+	pm_set_bits_syscon_register(syscon, NCP_SYSCON_KEY, VALID_KEY_VALUE);
+	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_HOLD_DBG, mask);
+
+
+	rVal = pm_dickens_logical_powerup(cluster);
 
 	/* start L2 */
 	pm_clear_bits_syscon_register(syscon, NCP_SYSCON_PWR_ACINACTM, mask);
 
 	iounmap(syscon);
 
-	return;
+	return (rVal);
 
 }
 
@@ -1137,7 +1298,7 @@ void pm_debug_read_pwr_registers(void) {
 
 	reg = readl(syscon + 0x1400);
 	pr_err("NCP_SYSCON_PWR_CLKEN: 0x%x\n", reg);
-	reg = readl(syscon + 0x1408);
+	reg = readl(syscon + NCP_SYSCON_PWR_ACINACTM);
 	pr_err("NCP_SYSCON_PWR_ACINACTM: 0x%x\n", reg);
 	reg = readl(syscon + 0x140c);
 	pr_err("NCP_SYSCON_PWR_CHIPSELECTEN: 0x%x\n", reg);
@@ -1213,6 +1374,95 @@ void pm_debug_read_pwr_registers(void) {
 	pr_err("NCP_SYSCON_PWR_DBGNOPWRDWN: 0x%x\n", reg);
 	reg = readl(syscon + 0x14A8);
 	pr_err("NCP_SYSCON_PWR_DBGPWRUPREQ: 0x%x\n", reg);
+	reg = readl(syscon + 0x1040);
+	pr_err("NCP_SYSCON_RESET_AXIS: 0x%x\n", reg);
+	reg = readl(syscon + 0x1044);
+	pr_err("NCP_SYSCON_RESET_AXIS-WORD1: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_RESET_CPU);
+	pr_err("NCP_SYSCON_RESET_CPU: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_HOLD_DBG);
+	pr_err("NCP_SYSCON_HOLD_DBG: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_HOLD_L2);
+	pr_err("NCP_SYSCON_HOLD_L2: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_HOLD_CPU);
+	pr_err("NCP_SYSCON_HOLD_CPU: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_PWRUP_CPU_RST);
+	pr_err("NCP_SYSCON_PWRUP_CPU_RST: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_RESET_STATUS);
+	pr_err("NCP_SYSCON_RESET_STATUS: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_RESET_CORE_STATUS);
+	pr_err("NCP_SYSCON_RESET_CORE_STATUS: 0x%x\n", reg);
+
+
+#if 0
+	reg = readl(syscon + NCP_SYSCON_MCG_CSW_CPU);
+	pr_err("NCP_SYSCON_MCG_CSW_CPU: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MCG_CSW_SYS);
+	pr_err("NCP_SYSCON_MCG_CSW_SYS: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MCG_DIV_CPU);
+	pr_err("NCP_SYSCON_MCG_DIV_CPU: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MCG_DIV_SYS);
+	pr_err("NCP_SYSCON_MCG_DIV_SYS: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_CLKDEBUG);
+	pr_err("NCP_SYSCON_CLKDEBUG: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_EVENT_ENB);
+	pr_err("NCP_SYSCON_EVENT_ENB: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_CPU_FAST_INT);
+	pr_err("NCP_SYSCON_CPU_FAST_INT: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_GIC_DISABLE);
+	pr_err("NCP_SYSCON_GIC_DISABLE: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_CP15SDISABLE);
+	pr_err("NCP_SYSCON_CP15SDISABLE: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_LDO_CTL);
+	pr_err("NCP_SYSCON_LDO_CTL: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_SHWK_QOS);
+	pr_err("NCP_SYSCON_SHWK_QOS: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_FUSE_RTO);
+	pr_err("NCP_SYSCON_FUSE_RTO: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_PFUSE);
+	pr_err("NCP_SYSCON_PFUSE: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_FUSE_STAT);
+	pr_err("NCP_SYSCON_FUSE_STAT: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_SCRATCH);
+	pr_err("NCP_SYSCON_SCRATCH: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI0);
+	pr_err("NCP_SYSCON_MASK_IPI0: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI1);
+	pr_err("NCP_SYSCON_MASK_IPI1: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI2);
+	pr_err("NCP_SYSCON_MASK_IPI2: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI3);
+	pr_err("NCP_SYSCON_MASK_IPI3: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI4);
+	pr_err("NCP_SYSCON_MASK_IPI4: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI5);
+	pr_err("NCP_SYSCON_MASK_IPI5: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI6);
+	pr_err("NCP_SYSCON_MASK_IPI6: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI7);
+	pr_err("NCP_SYSCON_MASK_IPI7: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI8);
+	pr_err("NCP_SYSCON_MASK_IPI8: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI9);
+	pr_err("NCP_SYSCON_MASK_IPI9: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI10);
+	pr_err("NCP_SYSCON_MASK_IPI10: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI11);
+	pr_err("NCP_SYSCON_MASK_IPI11: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI12);
+	pr_err("NCP_SYSCON_MASK_IPI12: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI13);
+	pr_err("NCP_SYSCON_MASK_IPI13: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI14);
+	pr_err("NCP_SYSCON_MASK_IPI14: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_MASK_IPI15);
+	pr_err("NCP_SYSCON_MASK_IPI15: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_SPARE0);
+	pr_err("NCP_SYSCON_SPARE0: 0x%x\n", reg);
+	reg = readl(syscon + NCP_SYSCON_STOP_CLK_CPU);
+	pr_err("NCP_SYSCON_STOP_CLK_CPU: 0x%x\n", reg);
+#endif
+
 
 	iounmap(syscon);
 }
@@ -1253,4 +1503,39 @@ void pm_dump_L2_registers(void) {
 	iounmap(syscon);
 }
 
+
+void pm_dump_dickens(void)
+{
+
+	pr_err("GOTO: %d\n", got_to);
+#if 0
+	void __iomem *dickens;
+	u32 status;
+	u32 i;
+
+	dickens = ioremap(DICKENS_PHYS_ADDR, SZ_4M);
+	if (dickens == NULL) {
+		pr_err("DICKENS: Failed to map the dickens registers\n");
+		return;
+	}
+
+	for (i = 0; i < DKN_HNF_TOTAL_NODES; ++i) {
+		status = readl(
+				dickens + (0x10000 * (DKN_HNF_NODE_ID + i))
+						+ DKN_HNF_SNOOP_DOMAIN_CTL);
+		udelay(1);
+		pr_err("DKN_HNF_SNOOP_DOMAIN_CTL[%d]: 0x%x\n", i, status);
+	}
+
+	status = readl(
+			dickens + (0x10000 * DKN_DVM_DOMAIN_OFFSET)
+					+ DKN_MN_DVM_DOMAIN_CTL);
+
+	pr_err("DKN_MN_DVM_DOMAIN_CTL: 0x%x\n", status);
+
+
+	iounmap(dickens);
+#endif
+
+}
 

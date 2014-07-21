@@ -66,6 +66,7 @@ static inline void cpu_leave_lowpower(void)
 
 static void __ref platform_do_lowpower(unsigned int cpu, int *spurious)
 {
+	pr_err("CHARLIE: %s-%d\n", __FILE__,__LINE__);
 
 #if 0
 	int phys_cpu, cluster;
@@ -111,6 +112,7 @@ static void __ref platform_do_lowpower(unsigned int cpu, int *spurious)
 
 int axxia_platform_cpu_kill(unsigned int cpu)
 {
+	pr_err("CHARLIE: %s-%d\n", __FILE__,__LINE__);
 	pm_cpu_shutdown(cpu);
 	return 1;
 }
@@ -148,6 +150,7 @@ void axxia_platform_cpu_die(unsigned int cpu)
 	int rVal = 0;
 	bool lastCpu;
 
+	pr_err("CHARLIE: %s-%d\n", __FILE__,__LINE__);
 	pm_request.cpu = cpu;
 	pm_request.cluster = 0;
 
@@ -160,10 +163,15 @@ void axxia_platform_cpu_die(unsigned int cpu)
 	if (rVal)
 		pr_err("CPU %d failed to die\n", cpu);
 
+	for (;;) {
+		wfi();
+	}
+
 }
 
 int platform_cpu_disable(unsigned int cpu)
 {
+	pr_err("CHARLIE: %s-%d\n", __FILE__,__LINE__);
 	/*
 	 * we don't allow CPU 0 to be shutdown (it is still too special
 	 * e.g. clock tick interrupts)

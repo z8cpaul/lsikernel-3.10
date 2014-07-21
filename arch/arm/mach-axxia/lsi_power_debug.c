@@ -28,14 +28,30 @@ int lsi_l2_proc(struct file *filp, char *buf, size_t count, loff_t *offp) {
 	return 0;
 }
 
+int lsi_dickens_proc(struct file *filp, char *buf, size_t count, loff_t *offp) {
+
+	pm_dump_dickens();
+	return 0;
+}
+
+int lsi_power_proc(struct file *filp, char *buf, size_t count, loff_t *offp) {
+
+	pm_cpu_powerup(4);
+	return 0;
+}
+
 
 struct file_operations wfi_fops = { read: lsi_wfi_proc };
 struct file_operations l2_fops = { read: lsi_l2_proc };
+struct file_operations dickens_fops = { read: lsi_dickens_proc };
+struct file_operations power_fops = { read: lsi_power_proc };
 
 
 void lsi_create_new_proc_entry(void) {
 	proc_create("wfi", 0, NULL, &wfi_fops);
 	proc_create("l2", 0, NULL, &l2_fops);
+	proc_create("dickens", 0, NULL, &dickens_fops);
+	proc_create("power", 0, NULL, &power_fops);
 }
 
 int lsi_proc_init(void) {
@@ -46,6 +62,7 @@ int lsi_proc_init(void) {
 void lsi_proc_cleanup(void) {
 	remove_proc_entry("wfi", NULL);
 	remove_proc_entry("l2", NULL);
+	remove_proc_entry("dickens", NULL);
 }
 
 MODULE_LICENSE("GPL");

@@ -27,6 +27,7 @@
 #include <mach/axxia-gic.h>
 
 extern void axxia_secondary_startup(void);
+static __init struct device_node *get_cpu_node(int cpu);
 
 #define SYSCON_PHYS_ADDR 0x002010030000ULL
 
@@ -91,6 +92,8 @@ static DEFINE_RAW_SPINLOCK(boot_lock);
 void __cpuinit axxia_secondary_init(unsigned int cpu)
 {
 
+	//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
+
 	/* Fixup for cross-cluster SEV */
 	do_fixup_sev();
 
@@ -109,19 +112,12 @@ void __cpuinit axxia_secondary_init(unsigned int cpu)
 	_raw_spin_unlock(&boot_lock);
 }
 
-int __cpuinit axxia_boot_secondary(unsigned int cpu, struct task_struct *idle)
+int __cpuinit __axxia_boot_secondary(unsigned int cpu, struct task_struct *idle)
 {
 	unsigned long timeout;
 	int phys_cpu, cluster;
-	unsigned long powered_down_cpu;
-	int rVal = 0;
-	int pow = 0;
 
-	/*
-	 * Set synchronisation state between this boot processor
-	 * and the secondary one.
-	 */
-	_raw_spin_lock(&boot_lock);
+	//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
 
 	/*
 	 * In the Axxia, the bootloader does not put the secondary cores
@@ -142,28 +138,17 @@ int __cpuinit axxia_boot_secondary(unsigned int cpu, struct task_struct *idle)
 	 *         | CLUSTER | Reserved  |CPU
 	 */
 	phys_cpu = cpu_logical_map(cpu);
-
-	powered_down_cpu = pm_get_powered_down_cpu();
-	if (powered_down_cpu & (1 << phys_cpu))
-	{
-		pr_err("CPU %d is down and needs power\n", phys_cpu);
-		rVal = pm_cpu_powerup(phys_cpu);
-		if (rVal)
-			return (rVal);
-		else
-			pow = 1;
-	}
-
-
 	cluster = (phys_cpu / 4) << 8;
 	phys_cpu = cluster + (phys_cpu % 4);
+	//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
 
 	/* Release the specified core */
 	write_pen_release(phys_cpu);
+	//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
 
 	/* Send a wakeup IPI to get the idled cpu out of WFI state */
-	if (!pow)
-		arch_send_wakeup_ipi_mask(cpumask_of(cpu));
+	arch_send_wakeup_ipi_mask(cpumask_of(cpu));
+	//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
 
 	/* Wait for so long, then give up if nothing happens ... */
 	timeout = jiffies + (1 * HZ);
@@ -174,20 +159,84 @@ int __cpuinit axxia_boot_secondary(unsigned int cpu, struct task_struct *idle)
 
 		udelay(10);
 	}
+	//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
+
+	return pen_release != -1 ? -ENOSYS : 0;
+}
+
+int __cpuinit axxia_boot_secondary(unsigned int cpu, struct task_struct *idle)
+{
+	unsigned long timeout;
+	int phys_cpu;
+	unsigned long powered_down_cpu;
+	int rVal = 0;
+
+	//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
+
+	/*
+	 * Set synchronisation state between this boot processor
+	 * and the secondary one.
+	 */
+	_raw_spin_lock(&boot_lock);
+
+	phys_cpu = cpu_logical_map(cpu);
+
+#if 1
+	powered_down_cpu = pm_get_powered_down_cpu();
+	if (powered_down_cpu & (1 << phys_cpu))
+	{
+		pr_err("CPU %d is down and needs power\n", phys_cpu);
+		rVal = pm_cpu_powerup(phys_cpu);
+		if (rVal)
+		{
+			_raw_spin_unlock(&boot_lock);
+			return (rVal);
+		}
+		else
+		{
+			write_pen_release(phys_cpu);
+			//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
+
+			/* Send a wakeup IPI to get the idled cpu out of WFI state */
+			arch_send_wakeup_ipi_mask(cpumask_of(cpu));
+			//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
+
+			/* Wait for so long, then give up if nothing happens ... */
+			timeout = jiffies + (1 * HZ);
+			while (time_before(jiffies, timeout)) {
+				smp_rmb();
+				if (pen_release == -1)
+					break;
+
+				udelay(10);
+			}
+			//set_cpu_online(cpu, true);
+			//pm_init_cpu(phys_cpu);
+			//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
+		}
+	}
+	else
+	{
+		rVal = __axxia_boot_secondary(cpu, idle);
+	}
+#endif
 
 	/*
 	 * Now the secondary core is starting up let it run its
 	 * calibrations, then wait for it to finish.
 	 */
 	_raw_spin_unlock(&boot_lock);
+	//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
 
-	return pen_release != -1 ? -ENOSYS : 0;
+	return (rVal);
+
 }
 
 static __init struct device_node *get_cpu_node(int cpu)
 {
 	struct device_node *np;
 
+	//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
 	for_each_node_by_type(np, "cpu") {
 		u32 reg;
 		if (of_property_read_u32(np, "reg", &reg))
@@ -199,12 +248,14 @@ static __init struct device_node *get_cpu_node(int cpu)
 	return NULL;
 }
 
+
 static void __init axxia_smp_prepare_cpus(unsigned int max_cpus)
 {
 	void __iomem *syscon;
 	int cpu_count = 0;
 	int cpu;
 
+	//pr_err("CHARLIE: %s-%d\n", __FILE__, __LINE__);
 	syscon = ioremap(SYSCON_PHYS_ADDR, SZ_64K);
 	if (WARN_ON(!syscon))
 		return;
