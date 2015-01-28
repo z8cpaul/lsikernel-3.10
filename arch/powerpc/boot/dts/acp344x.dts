@@ -21,7 +21,7 @@
         #size-cells = <1>;
 
         model = "ibm,acpx1-4xx";
-        compatible = "lsi,acp3440", "lsi,acp", "ibm,acpx1-4xx";
+        compatible = "lsi,axxia34xx", "lsi,acp", "ibm,acpx1-4xx";
         dcr-parent = <&{/cpus/cpu@0}>;
 
         aliases {
@@ -184,7 +184,8 @@
                         I2C: i2c0 {
                                 compatible = "acp-i2c";
                                 enabled = <0>;
-                                reg = <0x00403000 0x00001000>;
+                                reg = <0x00403000 0x00001000
+					0x00408000 0x00001000>;
                                 interrupt-parent = <&MPIC>;
                                 interrupts = <21>;
                         };
@@ -218,9 +219,6 @@
                                 // The following will get filled in by
                                 // the boot loader.
                                 mdio-clock = <0>;
-				// Not filled in by U-Boot
-				mdio-clock-offset = <0x10>;
-				mdio-clock-period = <0x2c>;
                                 phy-address = <0>;
                                 ad-value = <0>;
                                 mac-address = [00 00 00 00 00 00];
