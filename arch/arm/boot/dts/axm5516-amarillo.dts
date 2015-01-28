@@ -26,6 +26,18 @@
 	};
 };
 
+&edac_l3 {
+	status = "okay";
+};
+
+&edac_l2 {
+	status = "okay";
+};
+
+&edac_cpu {
+	status = "okay";
+};
+
 &femac {
 	status = "okay";
 	mdio-clock-offset = <0x1c>;
