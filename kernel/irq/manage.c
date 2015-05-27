@@ -198,7 +198,7 @@ int __irq_set_affinity(unsigned int irq, const struct cpumask *mask, bool force)
 	if (!desc)
 		return -EINVAL;
 
-	ret =  irq_set_affinity_locked(irq_desc_get_irq_data(desc), mask);
+	ret =  irq_set_affinity_locked(irq_desc_get_irq_data(desc), mask, false);
 	irq_put_desc_busunlock(desc, flags);
 	return ret;
 }
